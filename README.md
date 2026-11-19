@@ -43,3 +43,11 @@ fixtures/llm_responses.json. No network, no cost. Company names are fictional.
 
 Every row in `runs/run_log.jsonl` records the evidence, fetches, score, contact and why they were
 chosen, pain points, hook and flags, so each decision can be defended.
+
+## Web app
+
+`api/index.py` is a one-file Vercel Python function: Overview (funnel, pipeline), Companies (filters,
+per-company evidence, contact, pain points, email draft), and Run (offline demo). It shows
+`data/snapshot.json`, the last live run. Refresh it with `python run.py --domains domains.txt && python snapshot.py`
+and push; Vercel redeploys. The "Review and send" button opens your own mail app with the draft filled in,
+so nothing is sent from the site and no Gmail password is needed.

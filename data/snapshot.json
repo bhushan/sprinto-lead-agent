@@ -1,0 +1,853 @@
+{
+ "generated": "2026-11-19T05:16+00:00",
+ "hunter_left": 49,
+ "rows": [
+  {
+   "domain": "mindtickle.com",
+   "needs_human": false,
+   "flags": [
+    "Already certified? unanswered: treat as not certified, flag"
+   ],
+   "fetches": 2,
+   "score": 85,
+   "facts": {
+    "product": "AI-powered revenue enablement platform",
+    "buyer": "GTM teams",
+    "certifications": [],
+    "compliance_signals": [
+     "We constantly try to make sure that we meet our contractual and regulatory compliance obligations toward data protection.",
+     "Risks relevant to fraud, internal control, applicable laws, and customer commitment are identified through annual independent internal reviews and external risk assessments."
+    ],
+    "open_roles": 5
+   },
+   "evidence": [
+    {
+     "question": "Already certified?",
+     "answered": false,
+     "fetched": [
+      "/security: read"
+     ],
+     "if_unanswered": "treat as not certified, flag"
+    },
+    {
+     "question": "B2B SaaS?",
+     "answered": true,
+     "fetched": [],
+     "if_unanswered": null
+    },
+    {
+     "question": "Right stage?",
+     "answered": true,
+     "fetched": [
+      "/careers: read"
+     ],
+     "if_unanswered": null
+    }
+   ],
+   "contact": {
+    "name": "Swapnil Tamhane",
+    "title": "Director of Information Security",
+    "why": "Director of Information Security: owns security and compliance. Passed over 9 others."
+   },
+   "pain_points": [
+    {
+     "pain": "Ensuring continuous compliance with complex contractual and regulatory data protection obligations.",
+     "evidence": "We constantly try to make sure that we meet our contractual and regulatory compliance obligations toward data protection."
+    },
+    {
+     "pain": "Managing team capacity and maintaining security posture while facing bandwidth constraints due to open hiring needs.",
+     "evidence": "5 open roles"
+    }
+   ],
+   "hook": "We constantly try to make sure that we meet our contractual and regulatory compliance obligations toward data protection.",
+   "subject": "Compliance automation for Mindtickle",
+   "body": "Hi Swapnil,\n\nEnsuring Mindtickle continuously fulfills its contractual and regulatory data protection obligations can be tough while managing team capacity amidst open hiring needs.\n\nSprinto helps you maintain a solid security posture despite bandwidth constraints because it automates evidence collection through integrations.\n\nAre you open to a short call next week to see if this fits your workflow?\n\nBest,\nPiyush",
+   "send": "drafted to outbox/ (not sent)",
+   "status": "drafted",
+   "reason": "The company is a strong ICP fit as a B2B SaaS provider of an AI-powered revenue enablement platform with no existing certifications listed, despite actively managing data protection compliance obligations and external risk assessments.",
+   "seconds": 52.75
+  },
+  {
+   "domain": "hyperface.co",
+   "needs_human": false,
+   "flags": [
+    "Already certified? unanswered: treat as not certified, flag",
+    "Right stage? unanswered: qualify at lower rank, flagged"
+   ],
+   "fetches": 3,
+   "score": 55,
+   "facts": {
+    "product": "One operating layer to maximise engagement and ROI for your card program",
+    "buyer": "banks",
+    "certifications": [],
+    "compliance_signals": [
+     "Designed to meet evolving regulatory requirements and ready for tomorrow’s global standards."
+    ]
+   },
+   "evidence": [
+    {
+     "question": "Already certified?",
+     "answered": false,
+     "fetched": [
+      "/security: http 404"
+     ],
+     "if_unanswered": "treat as not certified, flag"
+    },
+    {
+     "question": "B2B SaaS?",
+     "answered": true,
+     "fetched": [],
+     "if_unanswered": null
+    },
+    {
+     "question": "Right stage?",
+     "answered": false,
+     "fetched": [
+      "/careers: read",
+      "/pricing: http 404"
+     ],
+     "if_unanswered": "qualify at lower rank, flagged"
+    }
+   ],
+   "status": "not_qualified",
+   "reason": "While the company's funding stage is unconfirmed, offering a card program operating layer to banks creates immediate enterprise pressure for compliance certifications like SOC 2 or ISO 27001.",
+   "seconds": 28.76
+  },
+  {
+   "domain": "spyne.ai",
+   "needs_human": false,
+   "flags": [
+    "Already certified? unanswered: treat as not certified, flag",
+    "Right stage? unanswered: qualify at lower rank, flagged"
+   ],
+   "fetches": 3,
+   "score": 25,
+   "facts": {
+    "product": "Spyne AI-powered automotive photography app",
+    "buyer": "dealerships",
+    "certifications": [],
+    "compliance_signals": [
+     "Spyne is built on industry-leading security and privacy standards to protect your data at every touchpoint. Our compliance framework ensures transparency, reliability, and enterprise-grade protection"
+    ],
+    "enterprise_tier": false
+   },
+   "evidence": [
+    {
+     "question": "Already certified?",
+     "answered": false,
+     "fetched": [
+      "/security: http 404"
+     ],
+     "if_unanswered": "treat as not certified, flag"
+    },
+    {
+     "question": "B2B SaaS?",
+     "answered": true,
+     "fetched": [],
+     "if_unanswered": null
+    },
+    {
+     "question": "Right stage?",
+     "answered": false,
+     "fetched": [
+      "/careers: http 404",
+      "/pricing: read"
+     ],
+     "if_unanswered": "qualify at lower rank, flagged"
+    }
+   ],
+   "status": "not_qualified",
+   "reason": "Spyne receives a 35 ICP fit score because while it currently lacks active security certifications, it sells primarily to automotive dealerships rather than enterprise tech buyers, lacks an enterprise tier, and its funding stage is unconfirmed.",
+   "seconds": 34.11
+  },
+  {
+   "domain": "tazapay.com",
+   "needs_human": false,
+   "flags": [
+    "Already certified? unanswered: treat as not certified, flag"
+   ],
+   "fetches": 3,
+   "score": 0,
+   "facts": {
+    "product": "Licensed cross-border payment infrastructure",
+    "buyer": "fintechs, marketplaces, and global platforms",
+    "certifications": [],
+    "compliance_signals": [
+     "Speed, reliability, and compliance are non-negotiable in OTC markets."
+    ],
+    "open_roles": 0,
+    "is_saas": false,
+    "enterprise_tier": false
+   },
+   "evidence": [
+    {
+     "question": "Already certified?",
+     "answered": false,
+     "fetched": [
+      "/security: http 404"
+     ],
+     "if_unanswered": "treat as not certified, flag"
+    },
+    {
+     "question": "B2B SaaS?",
+     "answered": true,
+     "fetched": [],
+     "if_unanswered": null
+    },
+    {
+     "question": "Right stage?",
+     "answered": false,
+     "fetched": [
+      "/careers: read",
+      "/pricing: read"
+     ],
+     "if_unanswered": "qualify at lower rank, flagged"
+    }
+   ],
+   "status": "disqualified",
+   "reason": "not a B2B SaaS company",
+   "seconds": 28.61
+  },
+  {
+   "domain": "atlan.com",
+   "needs_human": false,
+   "flags": [
+    "Already certified? unanswered: treat as not certified, flag",
+    "Right stage? unanswered: qualify at lower rank, flagged"
+   ],
+   "fetches": 3,
+   "score": 60,
+   "facts": {
+    "product": "Atlan",
+    "certifications": [],
+    "compliance_signals": [
+     "Atlan has been a really good partner in helping us figure out how to register AI models and applications, and what metadata to put in place to meet the transparency requirements that [AI Governance] legislation asks for."
+    ],
+    "buyer": "AI-forward teams",
+    "is_saas": true
+   },
+   "evidence": [
+    {
+     "question": "Already certified?",
+     "answered": false,
+     "fetched": [
+      "/security: read"
+     ],
+     "if_unanswered": "treat as not certified, flag"
+    },
+    {
+     "question": "B2B SaaS?",
+     "answered": true,
+     "fetched": [],
+     "if_unanswered": null
+    },
+    {
+     "question": "Right stage?",
+     "answered": false,
+     "fetched": [
+      "/careers: read",
+      "/pricing: read"
+     ],
+     "if_unanswered": "qualify at lower rank, flagged"
+    }
+   ],
+   "status": "not_qualified",
+   "reason": "Atlan fits Sprinto's target profile as a B2B SaaS company with no current certifications and active AI Governance compliance signals, though its funding stage remains unverified.",
+   "seconds": 44.37
+  },
+  {
+   "domain": "clootrack.com",
+   "needs_human": false,
+   "flags": [
+    "Already certified? unanswered: treat as not certified, flag",
+    "Right stage? unanswered: qualify at lower rank, flagged"
+   ],
+   "fetches": 3,
+   "score": 25,
+   "facts": {
+    "product": "AI agents that drive real business outcomes from voice of the customer",
+    "buyer": "worldwide product management and marketing teams",
+    "certifications": [],
+    "compliance_signals": [],
+    "open_roles": 0
+   },
+   "evidence": [
+    {
+     "question": "Already certified?",
+     "answered": false,
+     "fetched": [
+      "/security: http 404"
+     ],
+     "if_unanswered": "treat as not certified, flag"
+    },
+    {
+     "question": "B2B SaaS?",
+     "answered": true,
+     "fetched": [],
+     "if_unanswered": null
+    },
+    {
+     "question": "Right stage?",
+     "answered": false,
+     "fetched": [
+      "/careers: read",
+      "/pricing: http 404"
+     ],
+     "if_unanswered": "qualify at lower rank, flagged"
+    }
+   ],
+   "status": "not_qualified",
+   "reason": "While the company builds a B2B SaaS product featuring AI agents for product management and marketing teams, the score is low due to zero compliance signals, zero open roles, and an unverified funding stage.",
+   "seconds": 33.48
+  },
+  {
+   "domain": "zeta.tech",
+   "needs_human": false,
+   "flags": [
+    "Already certified? unanswered: treat as not certified, flag",
+    "Right stage? unanswered: qualify at lower rank, flagged"
+   ],
+   "fetches": 3,
+   "score": 40,
+   "facts": {
+    "product": "Platform-led banking solutions",
+    "buyer": "financial institutions",
+    "certifications": [],
+    "compliance_signals": []
+   },
+   "evidence": [
+    {
+     "question": "Already certified?",
+     "answered": false,
+     "fetched": [
+      "/security: http 404"
+     ],
+     "if_unanswered": "treat as not certified, flag"
+    },
+    {
+     "question": "B2B SaaS?",
+     "answered": true,
+     "fetched": [],
+     "if_unanswered": null
+    },
+    {
+     "question": "Right stage?",
+     "answered": false,
+     "fetched": [
+      "/careers: http 404",
+      "/pricing: http 404"
+     ],
+     "if_unanswered": "qualify at lower rank, flagged"
+    }
+   ],
+   "status": "not_qualified",
+   "reason": "Although the company sells platform-led banking solutions to financial institutions which typically mandate compliance, the fit is moderate due to unconfirmed funding stage and a lack of explicit compliance signals or certifications.",
+   "seconds": 27.29
+  },
+  {
+   "domain": "zluri.com",
+   "needs_human": false,
+   "flags": [],
+   "fetches": 0,
+   "score": 0,
+   "facts": {
+    "product": "Next-Gen Identity Governance and Administration",
+    "certifications": [
+     "SOC2",
+     "ISO 27001",
+     "HIPAA"
+    ],
+    "compliance_signals": [
+     "Accelerate access reviews by 10x with end-to-end automation that simplifies audits and strengthens your security posture."
+    ]
+   },
+   "evidence": [
+    {
+     "question": "Already certified?",
+     "answered": true,
+     "fetched": [],
+     "if_unanswered": null
+    }
+   ],
+   "status": "disqualified",
+   "reason": "already holds a named certification",
+   "seconds": 14.65
+  },
+  {
+   "domain": "helpshift.com",
+   "needs_human": false,
+   "flags": [],
+   "fetches": 1,
+   "score": 0,
+   "facts": {
+    "product": "Helpshift platform",
+    "certifications": [
+     "ISO27001",
+     "SOC2 (Type2)",
+     "HIPAA"
+    ],
+    "compliance_signals": [
+     "On a periodic basis Helpshift undergoes external assessments and audits which helps us attest and certify ourselves against standard Industry frameworks for Information security and Data Privacy such as ISO27001, SOC2 (Type2), HIPAA.",
+     "Helpshift’s platform and features are designed to support our customers in meeting their regulatory obligations under key global data protection frameworks, including the GDPR, CCPA, and COPPA."
+    ]
+   },
+   "evidence": [
+    {
+     "question": "Already certified?",
+     "answered": true,
+     "fetched": [
+      "/security: read"
+     ],
+     "if_unanswered": null
+    }
+   ],
+   "status": "disqualified",
+   "reason": "already holds a named certification",
+   "seconds": 29.98
+  },
+  {
+   "domain": "bureau.id",
+   "needs_human": false,
+   "flags": [
+    "Already certified? unanswered: treat as not certified, flag",
+    "Right stage? unanswered: qualify at lower rank, flagged"
+   ],
+   "fetches": 3,
+   "score": 50,
+   "facts": {
+    "product": "Real-Time Fraud Prevention & Identity Decisioning",
+    "buyer": "financial institutions, fintechs, eCommerce platforms, marketplaces, online gaming platforms, and online dating platforms",
+    "certifications": [],
+    "compliance_signals": []
+   },
+   "evidence": [
+    {
+     "question": "Already certified?",
+     "answered": false,
+     "fetched": [
+      "/security: http 404"
+     ],
+     "if_unanswered": "treat as not certified, flag"
+    },
+    {
+     "question": "B2B SaaS?",
+     "answered": true,
+     "fetched": [],
+     "if_unanswered": null
+    },
+    {
+     "question": "Right stage?",
+     "answered": false,
+     "fetched": [
+      "/careers: http 404",
+      "/pricing: http 404"
+     ],
+     "if_unanswered": "qualify at lower rank, flagged"
+    }
+   ],
+   "status": "not_qualified",
+   "reason": "While the company provides Real-Time Fraud Prevention & Identity Decisioning to enterprise-heavy buyers like financial institutions and fintechs who typically demand compliance certifications, the unknown funding stage and lack of explicit compliance signals keep the score at a moderate level.",
+   "seconds": 23.12
+  },
+  {
+   "domain": "keka.com",
+   "needs_human": false,
+   "flags": [
+    "Already certified? unanswered: treat as not certified, flag",
+    "Right stage? unanswered: qualify at lower rank, flagged"
+   ],
+   "fetches": 3,
+   "score": 60,
+   "facts": {
+    "product": "Keka",
+    "buyer": "life sciences & care providers",
+    "certifications": [],
+    "compliance_signals": [
+     "Keka conducts regular external audits and certification",
+     "Keka leverages 3rd party penetration testing firms several times a year to test the Keka products and product infrastructure.",
+     "Keka tests for potential vulnerabilities on a recurring basis. We run static code analysis, and infrastructure vulnerability scans."
+    ],
+    "is_saas": true
+   },
+   "evidence": [
+    {
+     "question": "Already certified?",
+     "answered": false,
+     "fetched": [
+      "/security: read"
+     ],
+     "if_unanswered": "treat as not certified, flag"
+    },
+    {
+     "question": "B2B SaaS?",
+     "answered": true,
+     "fetched": [],
+     "if_unanswered": null
+    },
+    {
+     "question": "Right stage?",
+     "answered": false,
+     "fetched": [
+      "/careers: read",
+      "/pricing: read"
+     ],
+     "if_unanswered": "qualify at lower rank, flagged"
+    }
+   ],
+   "status": "not_qualified",
+   "reason": "Keka is a B2B SaaS company that demonstrates strong security signals by conducting regular external audits and third-party penetration testing, but lacks listed certifications and an unconfirmed funding stage.",
+   "seconds": 56.07
+  },
+  {
+   "domain": "leena.ai",
+   "needs_human": false,
+   "flags": [],
+   "fetches": 0,
+   "score": 0,
+   "facts": {
+    "product": "Agentic AI Platform with Pre-Built AI Colleagues",
+    "buyer": "HR, IT, and Finance teams",
+    "certifications": [
+     "SOC 2 Type II",
+     "ISO 27001",
+     "HIPAA",
+     "GDPR"
+    ],
+    "compliance_signals": [
+     "Version 1.4 · audit trail updated"
+    ]
+   },
+   "evidence": [
+    {
+     "question": "Already certified?",
+     "answered": true,
+     "fetched": [],
+     "if_unanswered": null
+    }
+   ],
+   "status": "disqualified",
+   "reason": "already holds a named certification",
+   "seconds": 12.64
+  },
+  {
+   "domain": "darwinbox.com",
+   "needs_human": true,
+   "flags": [
+    "Already certified? unanswered: treat as not certified, flag"
+   ],
+   "fetches": 2,
+   "score": null,
+   "facts": {
+    "product": "Darwinbox - HR Software | New-Age HR Management Software",
+    "certifications": [],
+    "compliance_signals": []
+   },
+   "evidence": [
+    {
+     "question": "Already certified?",
+     "answered": false,
+     "fetched": [
+      "/security: http 404"
+     ],
+     "if_unanswered": "treat as not certified, flag"
+    },
+    {
+     "question": "B2B SaaS?",
+     "answered": false,
+     "fetched": [
+      "/product: http 404"
+     ],
+     "if_unanswered": "manual_review"
+    }
+   ],
+   "status": "manual_review",
+   "reason": "B2B SaaS? not answered within 1 fetch",
+   "seconds": 10.92
+  },
+  {
+   "domain": "whatfix.com",
+   "needs_human": true,
+   "flags": [
+    "Already certified? unanswered: treat as not certified, flag"
+   ],
+   "fetches": 2,
+   "score": null,
+   "facts": {
+    "product": "Whatfix | AI-Powered Digital Adoption Platform",
+    "certifications": [],
+    "compliance_signals": []
+   },
+   "evidence": [
+    {
+     "question": "Already certified?",
+     "answered": false,
+     "fetched": [
+      "/security: thin page: may be JavaScript-rendered"
+     ],
+     "if_unanswered": "treat as not certified, flag"
+    },
+    {
+     "question": "B2B SaaS?",
+     "answered": false,
+     "fetched": [
+      "/product: read"
+     ],
+     "if_unanswered": "manual_review"
+    }
+   ],
+   "status": "manual_review",
+   "reason": "B2B SaaS? not answered within 1 fetch",
+   "seconds": 22.13
+  },
+  {
+   "domain": "signzy.com",
+   "needs_human": false,
+   "flags": [
+    "Already certified? unanswered: treat as not certified, flag",
+    "Right stage? unanswered: qualify at lower rank, flagged"
+   ],
+   "fetches": 3,
+   "score": 60,
+   "facts": {
+    "product": "Identity and business verification APIs, KYC, KYB, and AML suites",
+    "buyer": "financial institutions and compliance teams",
+    "certifications": [],
+    "compliance_signals": [
+     "audit-ready workflows",
+     "built-in compliance, smart workflows, and ironclad audit trails"
+    ]
+   },
+   "evidence": [
+    {
+     "question": "Already certified?",
+     "answered": false,
+     "fetched": [
+      "/security: http 404"
+     ],
+     "if_unanswered": "treat as not certified, flag"
+    },
+    {
+     "question": "B2B SaaS?",
+     "answered": true,
+     "fetched": [],
+     "if_unanswered": null
+    },
+    {
+     "question": "Right stage?",
+     "answered": false,
+     "fetched": [
+      "/careers: read",
+      "/pricing: http 404"
+     ],
+     "if_unanswered": "qualify at lower rank, flagged"
+    }
+   ],
+   "status": "not_qualified",
+   "reason": "While the company operates as a B2B SaaS offering identity and business verification APIs to financial institutions with built-in audit-ready workflows, the lack of confirmed funding stage and current certification status keeps the score moderate.",
+   "seconds": 27.35
+  },
+  {
+   "domain": "perfios.com",
+   "needs_human": false,
+   "flags": [
+    "Already certified? unanswered: treat as not certified, flag",
+    "Right stage? unanswered: qualify at lower rank, flagged"
+   ],
+   "fetches": 3,
+   "score": 60,
+   "facts": {
+    "product": "Financial Statement Analyzer",
+    "buyer": "financial institutions",
+    "certifications": [],
+    "compliance_signals": [
+     "Escalating Regulatory Demands (DPDPA, GDPR, CCPA, etc.).",
+     "Independent security and privacy assessments to validate our compliance."
+    ]
+   },
+   "evidence": [
+    {
+     "question": "Already certified?",
+     "answered": false,
+     "fetched": [
+      "/security: read"
+     ],
+     "if_unanswered": "treat as not certified, flag"
+    },
+    {
+     "question": "B2B SaaS?",
+     "answered": true,
+     "fetched": [],
+     "if_unanswered": null
+    },
+    {
+     "question": "Right stage?",
+     "answered": false,
+     "fetched": [
+      "/careers: read",
+      "/pricing: read"
+     ],
+     "if_unanswered": "qualify at lower rank, flagged"
+    }
+   ],
+   "status": "not_qualified",
+   "reason": "The company shows strong alignment by selling a Financial Statement Analyzer to financial institutions with active signals for GDPR and independent security assessments while lacking current certifications, though the unconfirmed funding stage slightly lowers the score.",
+   "seconds": 48.93
+  },
+  {
+   "domain": "setu.co",
+   "needs_human": false,
+   "flags": [
+    "Already certified? unanswered: treat as not certified, flag",
+    "Right stage? unanswered: qualify at lower rank, flagged"
+   ],
+   "fetches": 3,
+   "score": 35,
+   "facts": {
+    "product": "Full-stack fintech that bridges every financial journey",
+    "buyer": "banks and fintechs",
+    "certifications": [],
+    "compliance_signals": []
+   },
+   "evidence": [
+    {
+     "question": "Already certified?",
+     "answered": false,
+     "fetched": [
+      "/security: http 404"
+     ],
+     "if_unanswered": "treat as not certified, flag"
+    },
+    {
+     "question": "B2B SaaS?",
+     "answered": true,
+     "fetched": [],
+     "if_unanswered": null
+    },
+    {
+     "question": "Right stage?",
+     "answered": false,
+     "fetched": [
+      "/careers: read",
+      "/pricing: http 404"
+     ],
+     "if_unanswered": "qualify at lower rank, flagged"
+    }
+   ],
+   "status": "not_qualified",
+   "reason": "While selling full-stack fintech solutions to banks and fintechs creates a likely need for compliance, the company receives a lower score due to unconfirmed funding stage fit and a complete lack of explicit compliance signals or listed certifications.",
+   "seconds": 20.93
+  },
+  {
+   "domain": "m2pfintech.com",
+   "needs_human": false,
+   "flags": [
+    "Already certified? unanswered: treat as not certified, flag",
+    "Right stage? unanswered: qualify at lower rank, flagged"
+   ],
+   "fetches": 3,
+   "score": 60,
+   "facts": {
+    "product": "Banking Technology Platform",
+    "buyer": "Fintechs, Banks, and Businesses",
+    "certifications": [],
+    "compliance_signals": []
+   },
+   "evidence": [
+    {
+     "question": "Already certified?",
+     "answered": false,
+     "fetched": [
+      "/security: http 404"
+     ],
+     "if_unanswered": "treat as not certified, flag"
+    },
+    {
+     "question": "B2B SaaS?",
+     "answered": true,
+     "fetched": [],
+     "if_unanswered": null
+    },
+    {
+     "question": "Right stage?",
+     "answered": false,
+     "fetched": [
+      "/careers: read",
+      "/pricing: http 404"
+     ],
+     "if_unanswered": "qualify at lower rank, flagged"
+    }
+   ],
+   "status": "not_qualified",
+   "reason": "The lead achieves a strong fit as a Banking Technology Platform selling to Fintechs, Banks, and Businesses with no existing certifications, though the lack of explicit funding stage information slightly reduces its priority rank.",
+   "seconds": 20.95
+  },
+  {
+   "domain": "yellow.ai",
+   "needs_human": true,
+   "flags": [
+    "Already certified? unanswered: treat as not certified, flag"
+   ],
+   "fetches": 2,
+   "score": null,
+   "facts": {
+    "product": "AI Agents for CX and EX Automation",
+    "certifications": [],
+    "compliance_signals": []
+   },
+   "evidence": [
+    {
+     "question": "Already certified?",
+     "answered": false,
+     "fetched": [
+      "/security: read"
+     ],
+     "if_unanswered": "treat as not certified, flag"
+    },
+    {
+     "question": "B2B SaaS?",
+     "answered": false,
+     "fetched": [
+      "/product: thin page: may be JavaScript-rendered"
+     ],
+     "if_unanswered": "manual_review"
+    }
+   ],
+   "status": "manual_review",
+   "reason": "B2B SaaS? not answered within 1 fetch",
+   "seconds": 17.96
+  },
+  {
+   "domain": "uniphore.com",
+   "needs_human": false,
+   "flags": [],
+   "fetches": 1,
+   "score": 0,
+   "facts": {
+    "product": "Uniphore Data and AI Orchestration Platform",
+    "certifications": [
+     "ISO/IEC 27001 : 2022",
+     "Level 1 PCI DSS Service Provider",
+     "SOC2 TypeII"
+    ],
+    "compliance_signals": [
+     "helps our customers meet their own compliance standards",
+     "will be periodically audited by an independent certification body to confirm that Uniphore continues to meet the requirements of this standard.",
+     "will be periodically audited by a Qualified Security Assessor (QSA) to assess whether the organisation conforms to the PCI DSS requirements."
+    ]
+   },
+   "evidence": [
+    {
+     "question": "Already certified?",
+     "answered": true,
+     "fetched": [
+      "/security: read"
+     ],
+     "if_unanswered": null
+    }
+   ],
+   "status": "disqualified",
+   "reason": "already holds a named certification",
+   "seconds": 19.9
+  }
+ ]
+}
