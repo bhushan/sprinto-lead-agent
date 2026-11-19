@@ -245,4 +245,8 @@ with config.forced_offline(False):
     except llm.ModelUnavailable as ex:
         assert "credits" in str(ex)
 _rq.post, llm.RETRY_WAITS, config.API_KEY = real_post, real_waits, ""
+# 14. The stage column shows a short stage, never the model's sentence
+assert app.stage_label("Series B") == "Series B" and app.stage_label("raised a series c round") == "Series C"
+assert app.stage_label("$1M funding round from private investors") == "Funded" and app.stage_label("Pre-seed") == "Seed"
+assert app.stage_label(None) == "-" and app.stage_label("Bootstrapped") == "Bootstrapped"
 print("ok")

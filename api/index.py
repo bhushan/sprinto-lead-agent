@@ -148,7 +148,7 @@ const progress=j=>j.discover?'Searching the news for new companies, up to three 
   'Researching '+j.queue[0]+' ('+(j.done.length+1)+' of '+(j.done.length+j.queue.length)+'), '+j.qualified+' qualified so far. Keep this tab open.';
 const drive=async(job,m)=>{try{while(job&&job.status==='running'){m.textContent=progress(job);const j=await post('step',{id:job.id});
     if(j.job.busy){await wait(5000)}job=j.job}
-  m.textContent=(job&&job.note)||'Done.';setTimeout(()=>location.reload(),1500)}
+  m.textContent=((job&&job.note)||'Done.')+' Refreshing...';setTimeout(()=>location.reload(),4000)}
   catch(x){m.textContent=x.message+' The run is saved: use Continue on the Run page.'}};
 const startRun=(b,m,p,data)=>{b.disabled=true;m.textContent='Starting...';post(p,data).then(j=>drive(j.job,m)).catch(x=>{m.textContent=x.message;b.disabled=false})};
 document.querySelectorAll('.draft').forEach(d=>{
@@ -345,6 +345,24 @@ def overview(snap, run_id="all"):
             f'<div class=box><h3>Companies in this view</h3><table>{here}</table><p><a class=back href="/?p=companies">All companies</a></p></div></div>')
 
 
+STAGE_WORD = re.compile(r"\bseries\s+([a-f])\b", re.I)
+
+
+def stage_label(v):
+    """A short stage for the table: "Series B", "Seed", "Funded", or the model's word when it is already short."""
+    v = " ".join(str(v or "").split())
+    if not v:
+        return "-"
+    m = STAGE_WORD.search(v)
+    if m:
+        return "Series " + m.group(1).upper()
+    if re.search(r"\bseed\b", v, re.I):
+        return "Seed"
+    if len(v) <= 16:
+        return v
+    return "Funded" if re.search(r"fund|raise|round|invest", v, re.I) else "-"
+
+
 def companies(snap, flt, q):
     rows = snap["rows"]
     groups = {"all": None, "qualified": jobs.QUALIFIED, "drafted": ("drafted",),
@@ -359,7 +377,7 @@ def companies(snap, flt, q):
     keep.sort(key=lambda r: (r["status"] != "drafted", -(r.get("score") or 0)))
     body = "".join(
         f'<tr class=l onclick="location=\'/?p=company&d={quote(r["domain"])}\'"><td><a href="/?p=company&d={quote(r["domain"])}"><b>{e(str(r.get("facts", {}).get("company_name") or r["domain"].split(".")[0].title()))}</b></a>'
-        f'<br><small>{e(r["domain"])}</small></td><td>{e(str(r.get("facts", {}).get("funding_stage") or "-"))}</td>'
+        f'<br><small>{e(r["domain"])}</small></td><td>{e(stage_label(r.get("facts", {}).get("funding_stage")))}</td>'
         f'<td><span class="pill {STATUS[r["status"]][1]}">{STATUS[r["status"]][0]}</span></td>'
         f'<td>{tier_badge(r)}</td><td>{"-" if r.get("score") is None else r["score"]}</td><td><small>{e(r["reason"][:120])}</small></td></tr>'
         for r in keep) or '<tr><td colspan=6><small>Nothing matches.</small></td></tr>'
@@ -743,7 +761,7 @@ def do_run(body):
         return 400, {"error": "No new domains to run. Use Find new companies first."}
     bad = [d for d in domains if not DOMAIN.match(d)]
     if bad:
-        return 400, {"error": "Not a domain name: " + bad[0][:60]}
+        return 400, {"error": f"{bad[0][:60]} is not a website address. Enter one domain per line, like example.com."}
     given = None  # a reviewer-supplied contact for a single company whose contact Hunter could not find
     c = body.get("contact")
     if isinstance(c, dict) and len(domains) == 1:
