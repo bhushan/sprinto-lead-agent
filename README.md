@@ -62,3 +62,22 @@ so nothing is sent from the site and no Gmail password is needed.
 - A quote the model returns is kept only if it appears word for word on the page it read. Dropped
   quotes are counted per company (`rejected_quotes`).
 - A trust center on Vanta, Drata or Sprinto (detected in the raw HTML) disqualifies a company.
+
+## Database, web runs and the feedback loop
+
+With a database connected the web app stores companies, runs and feedback instead of reading only the snapshot.
+Needed in the Vercel project's environment variables:
+
+| Variable | Why |
+|---|---|
+| `DATABASE_URL` | Postgres. Add Neon from the Vercel Marketplace (Storage tab) and it sets this for you |
+| `GEMINI_API_KEY` | Live runs and learning |
+| `HUNTER_API_KEY` | Contacts for live runs (one search per company that reaches that step) |
+| `APP_PASSWORD` | Anything that spends credits or writes data asks for it. Without it the site stays read-only |
+
+- **Run pipeline** (web): up to 5 companies per run (about 30 s each, inside the 300 s limit), from a list you
+  type or the next ones in `data/shortlist.txt`. Results are saved and show up everywhere.
+- **Feedback loop:** "Approve & send" records the draft before and after your edits; Good/Poor rates it.
+  "Learn from feedback" asks the model for at most 5 style rules from the last 20 events and stores them. Every
+  new draft (CLI or web) is written with those rules in its prompt.
+- Locally, set `SQLITE_PATH=/tmp/outreach.db` to try the same code on SQLite.

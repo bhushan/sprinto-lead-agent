@@ -15,11 +15,10 @@ rows = {}
 for line in Path("runs/run_log.jsonl").read_text(encoding="utf-8").splitlines():
     r = json.loads(line)
     rows[r["domain"]] = r
+import run
+
 for r in rows.values():
-    c = r.get("contact")
-    if c:
-        c.pop("email", None)
-        c["why"] = re.sub(r"\. Passed over: (.*)$", lambda m: f". Passed over {m.group(1).count('),') + 1} others.", c["why"])
+    run.public(r)
 
 hunter_left = None
 if config.HUNTER_API_KEY:

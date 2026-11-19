@@ -1,2 +1,2 @@
 { "rewrites": [{ "source": "/(.*)", "destination": "/api/index" }],
-  "functions": { "api/index.py": { "includeFiles": "{data,fixtures}/**" } } }
+  "functions": { "api/index.py": { "includeFiles": "{data,fixtures}/**", "maxDuration": 300 } } }

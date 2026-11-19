@@ -1,5 +1,6 @@
 import argparse
 import json
+import re
 import time
 from pathlib import Path
 
@@ -11,7 +12,7 @@ import scrape
 import send
 
 
-def process(domain, contacts_path="data/contacts.csv", approved=False, seed=None):
+def process(domain, contacts_path="data/contacts.csv", approved=False, seed=None, lessons=None):
     """Run the 7 steps for one domain. Always returns a row that records why it ended where it did."""
     t0 = time.time()
     row = {"domain": domain, "needs_human": False, "flags": [], "fetches": 0}
@@ -44,13 +45,22 @@ def process(domain, contacts_path="data/contacts.csv", approved=False, seed=None
     pains = drafts.pain_points(domain, facts, contact)
     if len(pains) != 2:
         return end("no_hook", f"expected 2 pain points, got {len(pains)}", human=True)
-    mail = drafts.draft(domain, facts, contact, pains, hook)
+    mail = drafts.draft(domain, facts, contact, pains, hook, lessons)
     if contact["name"].split()[0] not in mail["body"]:
         row["flags"].append("email does not address the contact by first name")
         row["needs_human"] = True
     row.update(pain_points=pains, hook=hook, subject=mail["subject"], body=mail["body"],
                send=send.send(domain, mail["subject"], mail["body"], approved))
     return end("drafted", q["reason"])
+
+
+def public(row):
+    """Drop the contact's email and the names of people passed over; the site shows titles and reasons only."""
+    c = row.get("contact")
+    if c:
+        c.pop("email", None)
+        c["why"] = re.sub(r"\. Passed over: (.*)$", lambda m: f". Passed over {m.group(1).count('),') + 1} others.", c["why"])
+    return row
 
 
 def run(domains, contacts_path, approved=False):

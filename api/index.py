@@ -1,26 +1,38 @@
 """Outreach Agent web app (one Vercel Python function, no framework).
 
-Shows data/snapshot.json (the last live run). "Run demo" executes the pipeline offline on the
-bundled fictional fixtures: OFFLINE is forced, so it never touches the network or sends mail.
-Draft edits and "resolved" marks live in the viewer's browser (localStorage), not on the server.
+Read-only on data/snapshot.json until a database is connected (DATABASE_URL). With a database, a Gemini key and
+APP_PASSWORD it can also run the pipeline from the browser and learn from the reviewer's edits and ratings.
+The offline demo always runs on the bundled fictional fixtures and never touches the network or sends mail.
 """
+import hmac
 import json
 import os
+import re
 import sys
 import tempfile
+import time
 from html import escape as e
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import parse_qs, quote, urlparse
 
-os.environ["OFFLINE"] = "1"
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 os.chdir(tempfile.gettempdir())  # send.py writes outbox/ relative to cwd; only the temp dir is writable on Vercel
 
+import requests  # noqa: E402
+
+import config  # noqa: E402
+import db  # noqa: E402
+import drafts as drafts_mod  # noqa: E402
 import impact  # noqa: E402
 import qualify  # noqa: E402
 import run  # noqa: E402
+
+config.OFFLINE = not config.API_KEY  # live whenever a Gemini key is configured
+APP_PASSWORD = os.getenv("APP_PASSWORD", "")
+DOMAIN = re.compile(r"^(?=.{4,100}$)([a-z0-9-]+\.)+[a-z]{2,}$")  # rejects IPs and localhost
+MAX_PER_RUN = 5  # ~30 s per company; stays inside the 300 s function limit
 
 STATUS = {  # label, css class
     "drafted": ("Email drafted", "ok"), "not_qualified": ("Not qualified", "mute"),
@@ -54,7 +66,7 @@ aside a:hover{background:rgba(255,255,255,.07)}aside a.on{background:linear-grad
 .top form{flex:1;max-width:420px}.top input{width:100%;padding:9px 14px;border:1px solid var(--line);border-radius:12px;background:var(--bg);font:inherit}
 .live{color:var(--mute);font-size:13px;margin-left:auto}.live b{color:var(--green-d)}
 .btn{display:inline-block;padding:9px 16px;border-radius:12px;border:1px solid var(--line);background:var(--panel);font-size:14px;cursor:pointer;font-family:inherit}
-.btn.p{background:linear-gradient(90deg,var(--blue),var(--green));color:#fff;border:0;font-weight:600}.btn.g{background:var(--green);color:#04281f;border:0;font-weight:600}
+.btn.p{background:linear-gradient(90deg,var(--blue),var(--green));color:#fff;border:0;font-weight:600}.btn.g{background:var(--green);color:#04281f;border:0;font-weight:600}.btn[disabled]{opacity:.5;cursor:not-allowed}
 main{padding:28px;max-width:1080px}.kicker{color:var(--mute);font-size:12px;letter-spacing:.06em;text-transform:uppercase}
 h1{font-size:34px;letter-spacing:-.03em;margin:6px 0 4px}h2{font-size:20px;letter-spacing:-.02em;margin:0 0 4px}.sub{color:var(--mute);max-width:620px;margin:0 0 20px}
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
@@ -76,32 +88,79 @@ td{padding:12px 10px;border-top:1px solid var(--line);vertical-align:top}tr.l{cu
 .q{border-left:3px solid var(--blue);padding:2px 0 2px 10px;margin:8px 0;color:var(--mute);font-size:13px}.q b{color:var(--text)}
 pre{white-space:pre-wrap;font:14px/1.6 ui-monospace,Consolas,monospace;margin:0}.back{color:var(--mute);font-size:14px}
 input.t,textarea.t{width:100%;border:1px solid var(--line);border-radius:10px;padding:9px 12px;font:inherit;background:#fff;margin:4px 0 8px}textarea.t{min-height:190px;font:14px/1.6 ui-monospace,Consolas,monospace}
-.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.ok-t{color:var(--green-d);font-weight:600;font-size:13px}
+textarea.dom{min-height:110px}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.ok-t{color:var(--green-d);font-weight:600;font-size:13px}
+.warnbox{background:#fffaf0;border:1px solid #f6d49a;color:#7a4a05;border-radius:12px;padding:12px 14px;margin:14px 0;font-size:14px}
 @media(max-width:860px){.app{grid-template-columns:1fr}aside{position:static;height:auto}.grid2{grid-template-columns:1fr}.fun div{grid-template-columns:100px 1fr 30px}main{padding:18px}.top{padding:12px 18px}}
 """
 
 JS = """
 const S=(k,v)=>{try{v===undefined?localStorage.removeItem(k):localStorage.setItem(k,v)}catch(e){}};
 const G=k=>{try{return localStorage.getItem(k)}catch(e){return null}};
+const tok=()=>{let t=G('token');if(!t){t=prompt('Access password');if(t)S('token',t)}return t};
+const post=(p,data)=>fetch('/?p='+p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...data,token:tok()})})
+  .then(r=>r.json().then(j=>{if(r.status===401)S('token');if(!r.ok)throw new Error(j.error||'failed');return j}));
 document.querySelectorAll('.draft').forEach(d=>{
   const id=d.dataset.d,sub=d.querySelector('.sub-in'),body=d.querySelector('.body-in'),msg=d.querySelector('.msg');
   const saved=G('draft:'+id);if(saved){try{const o=JSON.parse(saved);sub.value=o.s;body.value=o.b}catch(e){}}
   if(G('sent:'+id)){msg.textContent='Approved and opened in your mail app'}
   const save=()=>S('draft:'+id,JSON.stringify({s:sub.value,b:body.value}));sub.oninput=body.oninput=()=>{save();msg.textContent='Edit saved in this browser'};
   d.querySelector('.send').onclick=()=>{save();S('sent:'+id,'1');msg.textContent='Approved and opened in your mail app';
+    post('fb',{domain:id,kind:'edit',data:{before:{subject:sub.defaultValue,body:body.defaultValue},after:{subject:sub.value,body:body.value}}}).catch(()=>{});
     location.href='mailto:?subject='+encodeURIComponent(sub.value)+'&body='+encodeURIComponent(body.value)};
   d.querySelector('.copy').onclick=()=>{navigator.clipboard&&navigator.clipboard.writeText(sub.value+'\\n\\n'+body.value);msg.textContent='Copied'};
+  [['.up',1],['.down',-1]].forEach(([c,v])=>d.querySelector(c).onclick=()=>post('fb',{domain:id,kind:'rating',data:{value:v,hook:d.dataset.hook}})
+    .then(()=>msg.textContent='Thanks, saved to the feedback loop').catch(x=>msg.textContent=x.message));
 });
 document.querySelectorAll('.resolve').forEach(b=>{
   const id=b.dataset.d,card=b.closest('.box');if(G('done:'+id)){card.style.opacity='.45';b.textContent='Resolved'}
   b.onclick=()=>{const on=!G('done:'+id);S('done:'+id,on?'1':undefined);card.style.opacity=on?'.45':'1';b.textContent=on?'Resolved':'Mark resolved'}
 });
+const go=(sel,p,data,wait)=>{const b=document.querySelector(sel);if(!b)return;b.onclick=()=>{const m=document.querySelector('#status');b.disabled=true;m.textContent=wait;
+  post(p,data()).then(j=>{m.textContent=j.note||'Done';setTimeout(()=>location.reload(),600)}).catch(x=>{m.textContent=x.message;b.disabled=false})}};
+go('#go','run',()=>({domains:document.querySelector('#doms').value.split(/[\\s,]+/).filter(Boolean)}),'Running, this takes up to 3 minutes. Keep this tab open.');
+go('#short','run',()=>({shortlist:true}),'Running the next companies from the shortlist, up to 3 minutes. Keep this tab open.');
+go('#learn','learn',()=>({}),'Learning from your edits and ratings...');
 """
 
 
-def load():
+def _snapshot():
     f = ROOT / "data/snapshot.json"
     return json.loads(f.read_text(encoding="utf-8")) if f.exists() else {"rows": [], "generated": None, "hunter_left": None}
+
+
+_hl = {"t": 0, "v": None}
+
+
+def hunter_left(fallback):
+    """Live Hunter balance (a free call) when a key is set; the snapshot value otherwise. Cached for a minute."""
+    if config.HUNTER_API_KEY and not config.OFFLINE and time.time() - _hl["t"] > 60:
+        try:
+            r = requests.get("https://api.hunter.io/v2/account", params={"api_key": config.HUNTER_API_KEY}, timeout=3).json()
+            _hl.update(t=time.time(), v=r["data"]["requests"]["searches"]["remaining"])
+        except (requests.RequestException, KeyError, ValueError):
+            pass
+    return _hl["v"] if _hl["v"] is not None else fallback
+
+
+def load():
+    snap = _snapshot()
+    if not db.enabled:
+        return snap
+    try:
+        rows = db.companies()
+        if not rows:  # first visit after connecting the database: import the saved run
+            for r in snap["rows"]:
+                db.save_company(r)
+            rows = db.companies()
+        return {"rows": rows, "generated": db.last_update(), "hunter_left": hunter_left(snap["hunter_left"]), "db": True}
+    except Exception as ex:  # a broken database must not take the read-only pages down
+        return {**snap, "db_error": str(ex)[:160]}
+
+
+def live_missing():
+    """What is still needed before the browser can run the pipeline."""
+    return [name for name, ok in (("DATABASE_URL (add Neon from the Vercel Marketplace)", db.enabled),
+                                  ("GEMINI_API_KEY", bool(config.API_KEY)), ("APP_PASSWORD", bool(APP_PASSWORD))) if not ok]
 
 
 def count(rows, *st):
@@ -110,7 +169,7 @@ def count(rows, *st):
 
 def shell(tab, body, snap, q=""):
     rows = snap["rows"]
-    human, drafts = sum(r["needs_human"] for r in rows), count(rows, "drafted")
+    human, drafts, ev = sum(r["needs_human"] for r in rows), count(rows, "drafted"), 0
 
     def link(k, label, badge=None):
         b = f'<span class=badge>{badge}</span>' if badge else ""
@@ -122,6 +181,7 @@ def shell(tab, body, snap, q=""):
             '<div class=brand><i></i><div>OUTREACH<small>AGENT</small></div></div>'
             f'<h4>PIPELINE</h4>{link("overview", "Overview")}{link("run", "Run pipeline")}{link("companies", "Companies")}{link("method", "Method")}'
             f'<h4>HUMAN GATES</h4>{link("review", "Review queue", human)}{link("drafts", "Drafts &amp; sends", drafts)}'
+            f'<h4>LEARNING</h4>{link("feedback", "Feedback loop")}'
             '<div class=note>The model reads and writes. Python rules decide. Every draft waits for you.<br><br>Case study build, not affiliated with Sprinto.</div></aside>'
             '<div><div class=top><form action="/"><input type=hidden name=p value=companies><input name=q placeholder="Search companies" value="'
             f'{e(q)}"></form><span class=live>{when}</span><a class="btn p" href="/?p=run">Run pipeline</a></div>'
@@ -212,15 +272,50 @@ def review(snap):
 def drafts(snap):
     rows = [r for r in snap["rows"] if r.get("body")]
     cards = "".join(
-        f'<div class="box draft" data-d="{e(r["domain"])}"><div class=row><b>{e(r["contact"]["name"])}</b><small>{e(r["contact"]["title"])} at {e(r["domain"])}</small>'
+        f'<div class="box draft" data-d="{e(r["domain"])}" data-hook="{e(r["hook"][:200])}"><div class=row><b>{e(r["contact"]["name"])}</b><small>{e(r["contact"]["title"])} at {e(r["domain"])}</small>'
         f'<a class=btn style="margin-left:auto" href="/?p=company&d={quote(r["domain"])}">Why this email</a></div>'
         f'<small>Hook: {e(r["hook"])}</small>'
         f'<input class="t sub-in" value="{e(r["subject"])}"><textarea class="t body-in">{e(r["body"])}</textarea>'
-        '<div class=row><button class="btn g send">Approve &amp; send</button><button class="btn copy">Copy</button><span class="ok-t msg"></span></div></div>'
+        '<div class=row><button class="btn g send">Approve &amp; send</button><button class="btn copy">Copy</button>'
+        '<button class="btn up" title="Good draft">Good</button><button class="btn down" title="Poor draft">Poor</button><span class="ok-t msg"></span></div></div>'
         for r in rows)
     return ('<div class=kicker>Human gate</div><h1>Drafts &amp; sends</h1><p class=sub>Edit a draft, then approve it. '
             '"Approve &amp; send" opens your own mail app with the text filled in, so mail goes out from your account and nothing is sent from this site. '
-            'Edits are saved in this browser.</p>' + (cards or '<div class=box>No drafts yet.</div>'))
+            'Your edits and ratings feed the Feedback loop and shape the next drafts.</p>' + (cards or '<div class=box>No drafts yet.</div>'))
+
+
+def feedback(snap):
+    if not db.enabled:
+        return ('<div class=kicker>Learning</div><h1>Feedback loop</h1><div class=warnbox>No database is connected yet, so edits and ratings are not stored. '
+                'Add Neon from the Vercel Marketplace (Storage tab) and redeploy.</div>')
+    try:
+        evs, rules = db.events(100), db.learnings()
+    except Exception as ex:
+        return f'<div class=kicker>Learning</div><h1>Feedback loop</h1><div class=warnbox>Database error: {e(str(ex)[:160])}</div>'
+    edits = [x for x in evs if x["kind"] == "edit" and x["data"]["before"] != x["data"]["after"]]
+    up = sum(x["kind"] == "rating" and x["data"]["value"] > 0 for x in evs)
+    down = sum(x["kind"] == "rating" and x["data"]["value"] < 0 for x in evs)
+    cards = "".join(f'<div class=card><small>{a}</small><b>{b}</b><span>{c}</span></div>' for a, b, c in (
+        ("Events", len(evs), "edits and ratings"), ("Edited drafts", len(edits), "changed before sending"),
+        ("Good / Poor", f"{up} / {down}", "ratings"), ("Rules learned", len(rules), "used in every new draft")))
+    rule_html = "".join(f"<div class=q>{e(r)}</div>" for r in rules) or "<small>No rules yet. Edit or rate a few drafts, then click Learn.</small>"
+
+    def summary(x):
+        d = x["data"]
+        if x["kind"] == "rating":
+            return "rated " + ("good" if d["value"] > 0 else "poor")
+        if d["before"] == d["after"]:
+            return "approved without changes"
+        return f"edited: {len(d['before']['body'].split())} to {len(d['after']['body'].split())} words"
+    log = "".join(f"<tr><td><small>{e(x['ts'][:16].replace('T', ' '))}</small></td><td>{e(x['domain'])}</td><td>{e(summary(x))}</td></tr>" for x in evs[:20]) \
+        or "<tr><td colspan=3><small>Nothing captured yet.</small></td></tr>"
+    miss = live_missing()
+    btn = ('<button class="btn g" id="learn">Learn from feedback</button>' if not miss else
+           f'<button class=btn disabled>Learn from feedback</button> <small>needs {e(", ".join(miss))}</small>')
+    return ('<div class=kicker>Learning</div><h1>Feedback loop</h1><p class=sub>Every edit and rating you make on a draft is stored. '
+            'Learning turns them into a few rules that are added to the prompt of every new draft.</p>'
+            f'<div class=cards>{cards}</div><div class=box><h3>Rules in use</h3>{rule_html}<p>{btn} <span class=ok-t id=status></span></p></div>'
+            f'<div class=box><h3>Recent events</h3><table><tr><th>When</th><th>Company</th><th>What</th></tr>{log}</table></div>')
 
 
 NINE = [("Kill switches", "A no means do not build it", [
@@ -257,23 +352,44 @@ def method():
             f'<h2 style="margin-top:28px">Five pre-build decisions</h2><div class=box style="margin-top:10px">{dec}</div>')
 
 
-def run_page(demo):
+class offline:
+    """Run the pipeline on fixtures. ponytail: flips a module global, so a live run in the same instance could briefly see it; fine at this traffic."""
+    def __enter__(self):
+        self.prev, config.OFFLINE = config.OFFLINE, True
+
+    def __exit__(self, *a):
+        config.OFFLINE = self.prev
+
+
+def run_page(snap, demo):
     out = ""
     if demo:
-        rows = [run.process(d, str(ROOT / "data/contacts.csv")) for d in (ROOT / "data/domains.txt").read_text().split()]
+        with offline():
+            rows = [run.process(d, str(ROOT / "data/contacts.csv")) for d in (ROOT / "data/domains.txt").read_text().split()]
         st = impact.run_stats(rows)
         out = ('<div class=box><h3>Demo run: fictional companies, canned model replies, nothing sent</h3><table>'
                + "".join(f'<tr><td><b>{e(r["domain"])}</b></td><td><span class="pill {STATUS[r["status"]][1]}">{STATUS[r["status"]][0]}</span></td>'
                          f'<td><small>{e(r["reason"][:110])}</small></td></tr>' for r in rows)
                + f'</table><p><small>{st["companies"]} companies, {st["needs_human"]} for a human, '
                  f'{st["avg_fetches_beyond_homepage"]} extra page fetches each on average (cap 4).</small></p></div>')
+    miss = live_missing()
+    if miss:
+        live = ('<div class=warnbox><b>Live runs are switched off.</b> Still needed: ' + e(", ".join(miss)) + '. '
+                'Add them in the Vercel project settings and redeploy.</div>')
+    else:
+        try:
+            hist = "".join(f"<tr><td><small>{e(x['ts'][:16].replace('T', ' '))}</small></td><td>{x['n']} companies</td><td>{x['drafted']} drafted</td></tr>" for x in db.runs()) \
+                or "<tr><td colspan=3><small>No runs yet.</small></td></tr>"
+        except Exception as ex:
+            hist = f"<tr><td colspan=3><small>Database error: {e(str(ex)[:120])}</small></td></tr>"
+        live = (f'<div class=box><h3>Live run (real sites, Gemini and Hunter)</h3><p class=sub style="margin-bottom:8px">Up to {MAX_PER_RUN} companies per run, about 30 seconds each. '
+                'Each one that reaches the contact step spends one Hunter search.</p>'
+                '<textarea class="t dom" id=doms placeholder="One domain per line, e.g. example.com"></textarea>'
+                '<div class=row><button class="btn g" id=go>Run these domains</button><button class=btn id=short>Run the next companies from the shortlist</button>'
+                f'<span class=ok-t id=status></span></div></div><div class=box><h3>Recent runs</h3><table>{hist}</table></div>')
     return ('<div class=kicker>Run</div><h1>Run the pipeline</h1>'
-            '<p class=sub>A live run needs your keys, so it runs on your machine and publishes here. This page can run the offline demo.</p>'
-            '<p><a class="btn g" href="/?p=run&demo=1">Run the demo</a></p>' + out +
-            '<div class=box><h3>Live run</h3><pre>cp .env.example .env     # add GEMINI_API_KEY, HUNTER_API_KEY, TO_ADDRESS\n'
-            'python shortlist.py 20   # funded SaaS from Google News\n'
-            'python run.py --domains data/shortlist.txt\n'
-            'python snapshot.py       # refresh this site with the results\ngit push</pre></div>')
+            '<p class=sub>Results land in Companies, Review queue and Drafts &amp; sends. Nothing is emailed from here.</p>'
+            f'{live}<p><a class="btn" href="/?p=run&demo=1">Run the offline demo</a></p>{out}')
 
 
 def page(url):
@@ -287,20 +403,91 @@ def page(url):
         return shell("review", review(snap), snap)
     if tab == "drafts":
         return shell("drafts", drafts(snap), snap)
+    if tab == "feedback":
+        return shell("feedback", feedback(snap), snap)
     if tab == "method":
         return shell("method", method(), snap)
     if tab == "run":
-        return shell("run", run_page(q.get("demo")), snap)
+        return shell("run", run_page(snap, q.get("demo")), snap)
     return shell("overview", overview(snap), snap)
 
 
+def do_run(body):
+    if body.get("shortlist"):
+        have = {r["domain"] for r in db.companies()}
+        domains = [d for d in (ROOT / "data/shortlist.txt").read_text().split() if d not in have]
+    else:
+        domains = [str(d).strip().lower() for d in body.get("domains", [])]
+    domains = list(dict.fromkeys(domains))[:MAX_PER_RUN]
+    if not domains:
+        return 400, {"error": "No new domains to run."}
+    bad = [d for d in domains if not DOMAIN.match(d)]
+    if bad:
+        return 400, {"error": "Not a domain name: " + bad[0]}
+    sl = ROOT / "data/shortlist.json"
+    seeds = json.loads(sl.read_text(encoding="utf-8")) if sl.exists() else {}
+    lessons = db.learnings()
+    rows = []
+    for d in domains:
+        r = run.public(run.process(d, str(ROOT / "data/contacts.csv"), False, seeds.get(d), lessons))
+        db.save_company(r)
+        rows.append(r)
+    drafted = count(rows, "drafted")
+    db.add_run(len(rows), drafted)
+    return 200, {"note": f"Done: {len(rows)} companies, {drafted} drafted."}
+
+
+def do_fb(body):
+    kind, domain, data = body.get("kind"), str(body.get("domain", ""))[:100], body.get("data")
+    if kind not in ("edit", "rating") or not isinstance(data, dict):
+        return 400, {"error": "Bad feedback."}
+    if kind == "edit" and not all(isinstance(data.get(k), dict) for k in ("before", "after")):
+        return 400, {"error": "Bad feedback."}
+    if kind == "rating" and data.get("value") not in (1, -1):
+        return 400, {"error": "Bad feedback."}
+    db.add_event(domain, kind, data)
+    return 200, {"note": "Saved."}
+
+
+def do_learn(body):
+    rules = drafts_mod.learn(db.events(50))
+    if not rules:
+        return 200, {"note": "Nothing to learn yet. Edit or rate a few drafts first."}
+    db.set_learnings(rules)
+    return 200, {"note": f"Learned {len(rules)} rules."}
+
+
+ROUTES = {"run": do_run, "fb": do_fb, "learn": do_learn}
+
+
 class handler(BaseHTTPRequestHandler):
+    def _send(self, code, body, ctype="text/html; charset=utf-8"):
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        self.end_headers()
+        self.wfile.write(body if isinstance(body, bytes) else body.encode())
+
     def do_GET(self):
         try:
-            body, code = page(self.path).encode(), 200
+            self._send(200, page(self.path))
         except Exception as ex:  # show the failure instead of a blank 500
-            body, code = f"error: {ex}".encode(), 500
-        self.send_response(code)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
-        self.end_headers()
-        self.wfile.write(body)
+            self._send(500, f"error: {ex}")
+
+    def do_POST(self):
+        try:
+            n = int(self.headers.get("Content-Length") or 0)
+            body = json.loads(self.rfile.read(min(n, 60_000)) or b"{}")
+            route = ROUTES.get(parse_qs(urlparse(self.path).query).get("p", [""])[0])
+            if not route:
+                code, out = 404, {"error": "Unknown action."}
+            elif not APP_PASSWORD or not hmac.compare_digest(str(body.get("token", "")), APP_PASSWORD):
+                code, out = 401, {"error": "Wrong or missing access password."}
+            elif not db.enabled:
+                code, out = 503, {"error": "No database is connected."}
+            elif route is not do_fb and not config.API_KEY:
+                code, out = 503, {"error": "GEMINI_API_KEY is not set."}
+            else:
+                code, out = route(body)
+        except Exception as ex:
+            code, out = 500, {"error": str(ex)[:200]}
+        self._send(code, json.dumps(out), "application/json")
