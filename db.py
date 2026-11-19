@@ -2,7 +2,8 @@
 With neither, `enabled` is False and the web app stays read-only on data/snapshot.json."""
 import json
 import os
-from datetime import datetime, timezone
+import threading
+from datetime import datetime, timedelta, timezone
 
 URL = os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL")
 PATH = os.getenv("SQLITE_PATH")
@@ -16,35 +17,64 @@ SCHEMA = [
     "create table if not exists shortlist(domain text primary key, data text)",
     "create table if not exists people(domain text, name text, title text, email text, primary key(domain, name))",
     "create table if not exists settings(key text primary key, data text, updated text)",
+    "create table if not exists jobs(id text primary key, status text, data text, lease text, updated text)",
 ]
 _ready = False
+_conn = None
+_lock = threading.Lock()  # one connection per server process, used by one query at a time
 
 
 def _now():
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def _sql(sql, args=()):
-    global _ready
+def _connect():
     if URL:
         import psycopg
-        c = psycopg.connect(URL, autocommit=True, connect_timeout=10)
-    else:
-        import sqlite3
-        c = sqlite3.connect(PATH)
-    try:
-        cur = c.cursor()
-        if not _ready:
-            for s in SCHEMA:
-                cur.execute(s)
-            _ready = True
-        cur.execute(sql.replace("?", "%s") if URL else sql, args)
-        rows = cur.fetchall() if cur.description else []
-        if not URL:
-            c.commit()
-        return rows
-    finally:
-        c.close()
+        return psycopg.connect(URL, autocommit=True, connect_timeout=10, prepare_threshold=None)
+    import sqlite3
+    return sqlite3.connect(PATH, timeout=15, check_same_thread=False)
+
+
+def _run(sql, args):
+    global _conn, _ready
+    if _conn is None:
+        _conn = _connect()
+    cur = _conn.cursor()
+    if not _ready:
+        for s in SCHEMA:
+            cur.execute(s)
+        _ready = True
+    cur.execute(sql.replace("?", "%s") if URL else sql, args)
+    rows = cur.fetchall() if cur.description else []
+    if not URL:
+        _conn.commit()
+    return rows
+
+
+def _sql(sql, args=()):
+    """Run one statement on the shared connection. A connection the database closed (idle timeout, restart) is
+    reopened once and the statement retried."""
+    global _conn
+    with _lock:
+        try:
+            return _run(sql, args)
+        except Exception as ex:
+            if not _is_connection_error(ex):
+                raise
+            try:
+                _conn.close()
+            except Exception:
+                pass
+            _conn = None
+            return _run(sql, args)
+
+
+def _is_connection_error(ex):
+    if URL:
+        import psycopg
+        return isinstance(ex, (psycopg.OperationalError, psycopg.InterfaceError))
+    return False
 
 
 def companies():
@@ -72,6 +102,11 @@ def events(limit=50):
 
 def learnings():
     return [r for (r,) in _sql("select rule from learnings order by ts")]
+
+
+def sent_since(iso):
+    r = _sql("select count(*) from events where kind = ? and ts > ?", ("sent", iso))
+    return r[0][0] if r else 0
 
 
 def set_learnings(rules):
@@ -136,3 +171,39 @@ def all_people():
 
 def remove_person(domain, name):
     _sql("delete from people where domain = ? and name = ?", (domain, name))
+
+
+# Jobs: a run of the pipeline, advanced one company per request so no request nears the hosting time limit.
+
+def save_job(job):
+    _sql("insert into jobs(id, status, data, updated) values(?, ?, ?, ?) on conflict(id) do update set "
+         "status = excluded.status, data = excluded.data, updated = excluded.updated",
+         (job["id"], job["status"], json.dumps(job, ensure_ascii=False), _now()))
+
+
+def get_job(job_id):
+    r = _sql("select data, updated from jobs where id = ?", (job_id,))
+    return {**json.loads(r[0][0]), "updated": r[0][1]} if r else None
+
+
+def jobs_list(limit=10):
+    return [{**json.loads(d), "updated": u} for d, u in
+            _sql("select data, updated from jobs order by id desc limit " + str(int(limit)))]
+
+
+def jobs_since(iso):
+    r = _sql("select count(*) from jobs where id > ?", (iso,))
+    return r[0][0] if r else 0
+
+
+def claim_job(job_id, seconds):
+    """Take the job for `seconds` so a second tab or the cron cannot process the same company. True if taken."""
+    now = datetime.now(timezone.utc)
+    until = (now + timedelta(seconds=seconds)).isoformat(timespec="seconds")
+    r = _sql("update jobs set lease = ? where id = ? and (lease is null or lease < ?) returning id",
+             (until, job_id, now.isoformat(timespec="seconds")))
+    return bool(r)
+
+
+def release_job(job_id):
+    _sql("update jobs set lease = null where id = ?", (job_id,))

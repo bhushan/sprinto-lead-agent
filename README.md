@@ -1,28 +1,49 @@
-# sprinto-outreach
+# Outreach Agent
 
-7-step cold-outreach pipeline for Sprinto (MESA Case 2): scrape, extract, qualify
-(agent loop), find the contact, pain points, draft, send.
+Cold outreach for compliance automation: **discover, scrape, qualify, find the contact, draft, approve, send.**
+The app finds and scores. The LLM writes. A human approves every send.
 
-```
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env        # OFFLINE=1 needs no keys
-python run.py               # reads data/domains.txt, writes outbox/ and runs/run_log.jsonl
-python test_pipeline.py     # one check per Evidence Map path
-```
+**Live app:** [sprinto-lead-agent-omega.vercel.app](https://sprinto-lead-agent-omega.vercel.app) (open to reviewers, no sign-in)
 
-OFFLINE=1 reads cached pages from fixtures/pages and canned model replies from
-fixtures/llm_responses.json. No network, no cost. Company names are fictional.
+Built for MESA Case 2 (Sprinto). Case study build, not affiliated with Sprinto.
+
+## Where to look first
+
+| Page | What it shows |
+|---|---|
+| [Overview](https://sprinto-lead-agent-omega.vercel.app/?p=overview) | Funnel from news to sent email, why companies dropped, run selector |
+| [Companies](https://sprinto-lead-agent-omega.vercel.app/?p=companies) | Every researched company with its outcome, tier and fit score. Open one for the evidence trail |
+| [Run pipeline](https://sprinto-lead-agent-omega.vercel.app/?p=run) | Find companies for me, run specific domains, or [the offline demo](https://sprinto-lead-agent-omega.vercel.app/?p=run&demo=1) on fictional companies |
+| [Review queue](https://sprinto-lead-agent-omega.vercel.app/?p=review) | What the rules could not settle, with the action for each |
+| [Drafts and sends](https://sprinto-lead-agent-omega.vercel.app/?p=drafts) | Edit, rate Good or Poor, approve and send |
+| [Method](https://sprinto-lead-agent-omega.vercel.app/?p=method) | The Evidence Map, the nine checks and the five pre-build decisions |
+
+## Component map
+
+| Actor | Role |
+|---|---|
+| Growth Lead (human) | Sets ICP, keywords and regions; adds own websites and contacts; hits Run (or the Monday run does) |
+| Discovery (Google News) | Funding rounds and security or compliance hires, queued with the headline as evidence |
+| App (Python) | Scrapes the site and extra pages (robots-aware), drops early, scores /100, tiers A/B/C |
+| LLM (Gemini) | Extracts facts and quotes (code verifies each quote is on the page); writes two pain points and an email under 90 words (code checks it, one rewrite) |
+| Database (Neon Postgres) | ICP settings, my contacts, rules learned from edits, companies with verdict and evidence trail, runs |
+| Hunter.io | Domain search for a named contact, skipped when you added one yourself |
+| Review queue (human) | Flagged companies: add a contact, re-run |
+| Send (Gmail) | Approved drafts go to your own inbox only, 10 a day; mail-app fallback |
+
+Not built yet: confirming fit and contact before drafting, the day-14 follow-up and a CRM log.
 
 ## How each step works
 
-1. **Scrape** (`scrape.py`): single fetch per page, cached, robots.txt respected, 1s delay, HTML cleaned
-   to text (nav, scripts and forms dropped). A failure records its reason and the company goes to a human.
-2. **Extract** (`extract.py`): the model fills named fields (buyer, certifications, funding stage,
-   open roles...), never a free-form summary.
-3. **Qualify** (`qualify.py`): an agent loop driven by an Evidence Map. Code, not the model, checks
-   whether the fields are filled, picks the next page, enforces the fetch limit (worst case 4 beyond
-   the homepage) and decides when to stop.
+1. **Discover** (`shortlist.py`): Google News funding and hiring stories, filtered by stage, sector and age. A company
+   counts only when its homepage title names it and the page shares a topic word with the headline. Feeds and
+   homepages are read in parallel within a time budget.
+2. **Scrape** (`scrape.py`): one cached fetch per page, robots.txt respected, 1 s delay, public addresses only,
+   web pages only, at most 1.5 MB read. HTML is cleaned to text. A failure records its reason and goes to a human.
+3. **Extract** (`extract.py`): the model fills named fields, each coerced to its type. A quote that is not on the
+   page word for word is dropped and counted.
+4. **Qualify** (`qualify.py`): an agent loop driven by the Evidence Map. Code, not the model, decides when the
+   evidence is enough, which page to fetch next and when to stop (worst case 4 fetches beyond the homepage).
 
    | Question | Look at | Limit | Unanswered | Stop early |
    |---|---|---|---|---|
@@ -30,103 +51,58 @@ fixtures/llm_responses.json. No network, no cost. Company names are fictional.
    | B2B SaaS? | /product, /about | 1 | manual review | yes: disqualify |
    | Right stage? | /careers, /pricing, /customers | 2 | qualify at lower rank (-10), flag | no |
 
-   Then the model scores ICP fit 0-100 from the facts; 70 or more qualifies.
-4. **Contact** (`contacts.py`): Hunter.io Domain Search if `HUNTER_API_KEY` is set, otherwise
-   `data/contacts.csv`. Candidates are ranked by who owns security work (security/compliance, then
-   engineering leadership, then founder at companies under 50 people), never by "manager" in the
-   title. If nobody qualifies, a human is flagged.
-5. **Pain points** (`drafts.py`): exactly two, each with the fact that backs it.
-6. **Draft** (`drafts.py`): addressed to the contact by name, opening with a specific signal from the
-   company's own pages. Any email that misses the first name is flagged.
-7. **Send** (`send.py`): drafts to `outbox/` by default. A real Gmail send needs `OFFLINE=0`,
-   `TO_ADDRESS` set to your own address, `GMAIL_APP_PASSWORD`, and the explicit `--send` flag.
+   The model then scores ICP fit 0 to 100. Tier A at 85 or more, B from 70, C is a near miss within 15 below.
+   Only A and B get an email. A trust center on Vanta, Drata or Sprinto disqualifies.
+5. **Contact** (`contacts.py`): your own contacts first, else Hunter.io Domain Search, ranked by who owns security
+   work (security and compliance, then engineering leadership, then founders under 50 people). A failed Hunter
+   search (quota, bad key) is reported as such, not as "nobody found".
+6. **Pain points and draft** (`drafts.py`): exactly two pain points, each backed by a fact. The email opens with the
+   strongest hook and is checked in code: first name, company name, under about 90 words, one soft question, no
+   stock phrases, no invented numbers, no claim that the company lacks a certification.
+7. **Review and send** (`send.py`): a human edits and approves. Edits and ratings feed "Learn from feedback", which
+   turns them into at most 5 style rules added to every new draft.
 
-Every row in `runs/run_log.jsonl` records the evidence, fetches, score, contact and why they were
-chosen, pain points, hook and flags, so each decision can be defended.
+## Running on Vercel
 
-## Web app
+One Python function (`api/index.py`, no framework) on Fluid Compute, Neon Postgres from the Vercel Marketplace, and
+a weekly Vercel Cron.
 
-`api/index.py` is a one-file Vercel Python function: Overview (funnel, pipeline), Companies (filters,
-per-company evidence, contact, pain points, email draft), and Run (offline demo). It shows
-`data/snapshot.json`, the last live run. Refresh it with `python run.py --domains domains.txt && python snapshot.py`
-and push; Vercel redeploys. The "Review and send" button opens your own mail app with the draft filled in,
-so nothing is sent from the site and no Gmail password is needed.
+- **Runs are jobs** (`jobs.py`). A run is a database row; each request researches one company, saves it and the
+  progress, and returns, so no request nears the 300 s limit. The browser advances the job and shows progress.
+  If the tab closes or a step times out, nothing is lost: Run pipeline shows **Continue it here** and **Stop it**.
+  A lease stops two tabs, or a tab and the cron, from researching the same company.
+- **Failures are contained.** An unusable model reply or an unexpected page ends that company as "Needs a human"
+  with the reason. A model rate limit or outage pauses the job and keeps the company queued for a resume.
+- **Monday run:** `vercel.json` schedules the cron every Monday 05:00 UTC. It continues a paused run or starts a new
+  one, works for up to 270 s and pauses whatever is left. The route only accepts Vercel's `CRON_SECRET` header.
+- **Open to reviewers, spend capped:** there is no sign-in. Instead: 3 new runs an hour, 5 companies a run, 10 emails
+  a day, and mail only ever goes to your own address. Contact emails are stored but never shown.
+- **Per-request state:** the offline demo forces fixtures for its own request only; the page cache expires after
+  10 minutes; one database connection per server process, reopened if Neon closes it.
 
-## Stage 1 and guards
-
-- `python shortlist.py 20` finds recently funded SaaS companies on Google News (Series A-C in the
-  headline, last 2 years, excluded sectors dropped) and resolves each to a domain only when the
-  homepage title names the company and the page shares a topic word with the headline. The funding
-  stage and its headline are stored as evidence for the "right stage?" question, then
-  `python run.py --domains data/shortlist.txt` runs them.
-- A quote the model returns is kept only if it appears word for word on the page it read. Dropped
-  quotes are counted per company (`rejected_quotes`).
-- A trust center on Vanta, Drata or Sprinto (detected in the raw HTML) disqualifies a company.
-
-## Database, web runs and the feedback loop
-
-With a database connected the web app stores companies, runs and feedback instead of reading only the snapshot.
-Needed in the Vercel project's environment variables:
+### Environment variables
 
 | Variable | Why |
 |---|---|
-| `DATABASE_URL` | Postgres. Add Neon from the Vercel Marketplace (Storage tab) and it sets this for you |
-| `GEMINI_API_KEY` | Live runs and learning |
-| `HUNTER_API_KEY` | Contacts for live runs (one search per company that reaches that step) |
-| `APP_PASSWORD` | Optional. If set, runs, learning and feedback ask for it. If not, runs are capped at 3 an hour for everyone to protect credits |
+| `DATABASE_URL` | Neon Postgres. Add Neon from the Vercel Marketplace (Storage tab) and it is set for you |
+| `GEMINI_API_KEY` | Live runs and learning. `GEMINI_MODEL` overrides the model |
+| `HUNTER_API_KEY` | Contacts for live runs (one search per company that qualifies) |
+| `TO_ADDRESS`, `GMAIL_APP_PASSWORD` | Optional. Send approved drafts to your own inbox (Google app password, needs 2-step verification). Without them the button opens your mail app |
+| `CRON_SECRET` | Set. Vercel sends it to the weekly run |
 
-- **Run pipeline** (web): up to 5 companies per run (about 30 s each, inside the 300 s limit), from a list you
-  type or the next ones in `data/shortlist.txt`. Results are saved and show up everywhere.
-- **Feedback loop:** "Approve & send" records the draft before and after your edits; Good/Poor rates it.
-  "Learn from feedback" asks the model for at most 5 style rules from the last 20 events and stores them. Every
-  new draft (CLI or web) is written with those rules in its prompt.
-- Locally, set `SQLITE_PATH=/tmp/outreach.db` to try the same code on SQLite.
+Without a database the site stays read-only on `data/snapshot.json` (the last live run) and the offline demo works.
 
-## ICP settings
+## Local
 
-The ICP settings page (stored in the database) changes, without code: the score needed to draft, the penalty for an
-unknown funding stage, which funding stages count, sectors to skip in Find new companies, how many pages each
-Evidence Map question may fetch, the job-title words used to pick the contact, and the sender name. They apply to the
-next run. `settings.py` holds the defaults and the validation. Anyone who can open the site can change them, so add
-sign-in before sharing the address widely.
+```
+uv venv --python 3.13 .venv && uv pip install --python .venv/bin/python -r requirements.txt
+cp .env.example .env               # OFFLINE=1 needs no keys
+.venv/bin/python run.py            # data/domains.txt -> outbox/ and runs/run_log.jsonl
+.venv/bin/python test_pipeline.py  # one check per Evidence Map path
+.venv/bin/python test_stability.py # bad model replies, rate limits, jobs, limits, every page renders
+```
 
-## One-click run and the weekly schedule
-
-"Find companies for me" (Run page) refreshes the funding shortlist when nothing is waiting, then researches companies
-one by one until the chosen number qualify (up to 5 looked at per click). Every run gets an id; the Overview run
-selector, the status chip and the Companies filters use it. `vercel.json` also schedules the same job every Monday
-05:00 UTC through Vercel Cron; the route only accepts Vercel's `CRON_SECRET` bearer header.
-
-## Prospects
-
-The Prospects page saves your own search keywords (up to 5, e.g. "cybersecurity, healthtech") and regions (India, US,
-UK, Singapore). "Save and search now" turns each keyword into a Google News funding query for the ICP stages, resolves
-each company to a website, and adds it to the queue; you can also paste your own websites. The Run page then researches
-the queue, and the Monday run uses the same keywords. The built-in SaaS search is used when no keywords are set.
-
-## My contacts
-
-The My contacts page stores people you already know (website, name, title, optional email). When the pipeline
-researches a company with your contacts, it writes to the best-fitting one and spends no Hunter search; other
-companies still use Hunter. Emails are stored but never rendered on the site.
-
-## Email quality and sending
-
-- **Hook:** the quote closest to audits or customer pressure is used; the funding news only when the pages gave none.
-- **Check:** every draft is checked in code: addressed by first name, mentions the company, under about 90 words,
-  one soft question, no stock phrases, no exclamation marks or placeholders, no numbers that are not in the facts,
-  and no claim that the company lacks a certification (that is never verified). A failing draft is rewritten once
-  with the problems named; if it still fails it is flagged "Check before sending" and goes to the Review queue.
-- **Send from the site:** set `TO_ADDRESS` (your own address) and `GMAIL_APP_PASSWORD` (a Google app password, needs
-  2-step verification) as Vercel environment variables. "Approve & send" then emails the draft to your own inbox,
-  never to the prospect, at most 10 a day, and shows only a masked address. Without them the button opens your mail app.
-
-## Discovery sources and tiers
-
-- **Two discovery sources**, switchable on the Prospects page: funding news (a recent Series A-C round) and hiring news
-  (a security or compliance hire, such as a CISO or head of compliance, in the last 180 days). A company found by
-  hiring news carries the headline as evidence, and it becomes the email hook when the site gives no better one.
-  Hiring stories are rare in news search, so expect a few leads per search, not dozens.
-- **Tiers:** A at the "tier A" score (default 85) or above, B from the qualifying score (default 70), C for a near miss
-  within 15 points below it. Only A and B get an email. Tiers are computed from the current settings, so changing
-  a threshold re-tiers every company. Companies and Drafts show the tier; Companies can filter by it.
+OFFLINE=1 reads cached pages from `fixtures/pages` and canned model replies from `fixtures/llm_responses.json`.
+No network, no cost. Company names in the fixtures are fictional. Set `SQLITE_PATH=/tmp/outreach.db` to try the
+database features on SQLite. `python shortlist.py 20` refreshes the shortlist; `python snapshot.py` turns the last
+run log into `data/snapshot.json`.

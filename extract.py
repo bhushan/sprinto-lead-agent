@@ -21,9 +21,26 @@ def _norm(s):
     return " ".join(s.lower().split())
 
 
+def _clean(raw):
+    """Coerce each field to its type; a value of the wrong type is treated as unknown."""
+    out = {}
+    for k in FIELDS[1:]:
+        v = raw.get(k)
+        if k in ("is_saas", "enterprise_tier"):
+            v = v if isinstance(v, bool) else None
+        elif k in ("headcount", "open_roles"):
+            v = llm.number(v, 0, 10_000_000)
+        elif k in ("certifications", "compliance_signals"):
+            v = [v] if isinstance(v, str) else v
+            v = [x.strip() for x in v if isinstance(x, str) and x.strip()] if isinstance(v, list) else []
+        else:
+            v = " ".join(str(v).split())[:300] if isinstance(v, (str, int, float)) and not isinstance(v, bool) and str(v).strip() else None
+        out[k] = v
+    return out
+
+
 def extract(domain, page, text):
-    raw = llm.ask("extract", domain, PROMPT.format(text=text), key=page)
-    out = {k: raw.get(k) for k in FIELDS}
+    out = _clean(llm.ask("extract", domain, PROMPT.format(text=text), key=page))
     # a quote the page does not contain is a hallucination: drop it, count it
     seen = _norm(text)
     claimed = out["compliance_signals"] or []

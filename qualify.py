@@ -107,5 +107,9 @@ def qualify(domain, home_text, seed=None):
             flags.append(f"{q['ask']} unanswered: {q['if_unanswered']}")
 
     ans = llm.ask("qualify", domain, PROMPT.format(stages=STAGES_TEXT, facts=json.dumps(facts), flags="; ".join(flags) or "none"))
-    score = ans["score"] - (config.STAGE_UNKNOWN_PENALTY if not _stage_known(facts) else 0)
-    return result("qualified" if score >= config.QUALIFY_THRESHOLD else "not_qualified", ans["reason"], score)
+    raw = llm.number(ans.get("score"), 0, 100)
+    if raw is None:
+        raise llm.ModelError("the qualify reply had no usable score")
+    score = max(0, raw - (config.STAGE_UNKNOWN_PENALTY if not _stage_known(facts) else 0))
+    reason = " ".join(str(ans.get("reason") or "").split())[:400] or f"fit score {score}"
+    return result("qualified" if score >= config.QUALIFY_THRESHOLD else "not_qualified", reason, score)

@@ -1,8 +1,10 @@
 """Outreach Agent web app (one Vercel Python function, no framework).
 
-Read-only on data/snapshot.json until a database is connected (DATABASE_URL). With a database, a Gemini key and
-APP_PASSWORD it can also run the pipeline from the browser and learn from the reviewer's edits and ratings.
-The offline demo always runs on the bundled fictional fixtures and never touches the network or sends mail.
+Read-only on data/snapshot.json until a database is connected (DATABASE_URL). With a database and a Gemini key it
+can also run the pipeline from the browser and learn from the reviewer's edits and ratings. There is no sign-in, so
+anyone with the address can review it; spend is capped instead (runs an hour, companies a run, emails a day, and
+mail only ever goes to your own inbox). Runs are jobs advanced one company per request (jobs.py), so no request
+nears the function time limit. The offline demo runs on the bundled fictional fixtures and never touches the network.
 """
 import hmac
 import json
@@ -11,6 +13,7 @@ import re
 import sys
 import tempfile
 import time
+import traceback
 from datetime import datetime, timedelta, timezone
 from html import escape as e
 from http.server import BaseHTTPRequestHandler
@@ -24,9 +27,11 @@ os.chdir(tempfile.gettempdir())  # send.py writes outbox/ relative to cwd; only 
 import requests  # noqa: E402
 
 import config  # noqa: E402
+import contacts  # noqa: E402
 import db  # noqa: E402
 import drafts as drafts_mod  # noqa: E402
 import impact  # noqa: E402
+import jobs  # noqa: E402
 import qualify  # noqa: E402
 import run  # noqa: E402
 import send as mail_out  # noqa: E402
@@ -34,22 +39,24 @@ import settings  # noqa: E402
 import shortlist  # noqa: E402
 
 config.OFFLINE = not config.API_KEY  # live whenever a Gemini key is configured
-APP_PASSWORD = os.getenv("APP_PASSWORD", "")
 DOMAIN = re.compile(r"^(?=.{4,100}$)([a-z0-9-]+\.)+[a-z]{2,}$")  # rejects IPs and localhost
-MAX_PER_RUN = 5  # ~30 s per company; stays inside the 300 s function limit
+MAX_PER_RUN = jobs.MAX_PER_RUN
 MAX_SENDS_PER_DAY = 10  # sending is locked to your own address; this stops a loop from filling your inbox
-MAX_RUNS_PER_HOUR = 3  # protects Gemini and Hunter credits when APP_PASSWORD is not set
+MAX_RUNS_PER_HOUR = 3  # the site is open to reviewers, so this protects Gemini and Hunter credits
+CRON_BUDGET = 270  # seconds of the 300 s limit the weekly run may use; the rest is paused for a resume
 
 STATUS = {  # label, css class
     "drafted": ("Email drafted", "ok"), "not_qualified": ("Not qualified", "mute"),
     "disqualified": ("Disqualified", "mute"), "manual_review": ("Needs a human", "warn"),
     "failed": ("Needs a human", "warn"), "no_contact": ("Needs a human", "warn"), "no_hook": ("Needs a human", "warn"),
+    "error": ("Needs a human", "warn"),
 }
 TODO = {  # what the human should do for each hand-over
     "manual_review": "Open the site and decide if it is a B2B SaaS company. If yes, add it to your list and re-run.",
     "failed": "The homepage could not be read. Check the site by hand, or try the domain again later.",
     "no_contact": "Hunter found nobody who owns security or engineering. Look the right person up in Apollo and add them on the My contacts page.",
     "no_hook": "Nothing specific to open with. Write the first line yourself.",
+    "error": "Something went wrong while researching it (the reason is above). Re-run it; if it fails again, check the site by hand.",
 }
 STEPS = [("Shortlist", "Funded SaaS from Google News", 0), ("Scrape", "One cached, robots-aware fetch", 0),
          ("Extract", "Named fields, quotes verified", 0), ("Qualify", "Evidence Map loop, 4 fetches max", 0),
@@ -120,9 +127,17 @@ JS = """
 try{document.documentElement.dataset.theme=localStorage.getItem('theme')||''}catch(e){}
 const S=(k,v)=>{try{v===undefined?localStorage.removeItem(k):localStorage.setItem(k,v)}catch(e){}};
 const G=k=>{try{return localStorage.getItem(k)}catch(e){return null}};
-const tok=()=>{if(!NEEDPW)return '';let t=G('token');if(!t){t=prompt('Access password');if(t)S('token',t)}return t};
-const post=(p,data)=>fetch('/?p='+p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...data,token:tok()})})
-  .then(r=>r.json().then(j=>{if(r.status===401)S('token');if(!r.ok)throw new Error(j.error||'failed');return j}));
+const post=(p,data)=>fetch('/?p='+p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data||{})})
+  .then(r=>r.text().then(t=>{let j;try{j=JSON.parse(t)}catch(e){throw new Error(r.status===504?'The server took too long on this step.':'Server error ('+r.status+').')}
+    if(!r.ok)throw new Error(j.error||'Failed.');return j}),()=>{throw new Error('Network error. Check your connection.')});
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+const progress=j=>j.discover?'Searching the news for new companies, up to three minutes. Keep this tab open.':
+  'Researching '+j.queue[0]+' ('+(j.done.length+1)+' of '+(j.done.length+j.queue.length)+'), '+j.qualified+' qualified so far. Keep this tab open.';
+const drive=async(job,m)=>{try{while(job&&job.status==='running'){m.textContent=progress(job);const j=await post('step',{id:job.id});
+    if(j.job.busy){await wait(5000)}job=j.job}
+  m.textContent=(job&&job.note)||'Done.';setTimeout(()=>location.reload(),1500)}
+  catch(x){m.textContent=x.message+' The run is saved: use Continue on the Run page.'}};
+const startRun=(b,m,p,data)=>{b.disabled=true;m.textContent='Starting...';post(p,data).then(j=>drive(j.job,m)).catch(x=>{m.textContent=x.message;b.disabled=false})};
 document.querySelectorAll('.draft').forEach(d=>{
   const id=d.dataset.d,sub=d.querySelector('.sub-in'),body=d.querySelector('.body-in'),msg=d.querySelector('.msg');
   const saved=G('draft:'+id);if(saved){try{const o=JSON.parse(saved);sub.value=o.s;body.value=o.b}catch(e){}}
@@ -145,13 +160,15 @@ document.querySelectorAll('.resolve').forEach(b=>{
 const go=(sel,p,data,wait)=>{const b=document.querySelector(sel);if(!b)return;b.onclick=()=>{const m=document.querySelector('#status');b.disabled=true;m.textContent=wait;
   post(p,data()).then(j=>{m.textContent=j.note||'Done';setTimeout(()=>location.reload(),600)}).catch(x=>{m.textContent=x.message;b.disabled=false})}};
 document.querySelectorAll('.act').forEach(b=>{b.onclick=()=>{const c=b.closest('.box'),m=c.querySelector('.amsg'),d=b.dataset.d,data={domains:[d]};
-  const n=c.querySelector('.cn'),t=c.querySelector('.ct');if(n)data.contact={name:n.value,title:t.value};
-  b.disabled=true;m.textContent='Running, up to a minute...';
-  post('run',data).then(j=>{m.textContent=j.note;setTimeout(()=>location.reload(),700)}).catch(x=>{m.textContent=x.message;b.disabled=false})}});
+  const n=c.querySelector('.cn'),t=c.querySelector('.ct');if(n)data.contact={name:n.value,title:t.value};startRun(b,m,'run',data)}});
+const cont=document.querySelector('#cont');if(cont)cont.onclick=()=>{const m=document.querySelector('#status');cont.disabled=true;
+  post('resume',{id:cont.dataset.id}).then(j=>drive(j.job,m)).catch(x=>{m.textContent=x.message;cont.disabled=false})};
+const stopb=document.querySelector('#stop');if(stopb)stopb.onclick=()=>{stopb.disabled=true;post('stop',{id:stopb.dataset.id}).then(()=>location.reload()).catch(x=>{document.querySelector('#status').textContent=x.message;stopb.disabled=false})};
 document.addEventListener('keydown',ev=>{if((ev.ctrlKey||ev.metaKey)&&ev.key==='k'){ev.preventDefault();const q=document.querySelector('#gq');if(q)q.focus()}});
 const th=document.querySelector('#theme');if(th)th.onclick=()=>{const d=document.documentElement.dataset.theme==='dark'?'':'dark';document.documentElement.dataset.theme=d;S('theme',d)};
 let target=3;document.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.seg button').forEach(x=>x.classList.remove('on'));b.classList.add('on');target=+b.dataset.n});
-go('#auto','auto',()=>({target}),'Finding companies, researching them and stopping when enough qualify. This takes up to 4 minutes, keep this tab open.');
+const runBtn=(sel,p,data)=>{const b=document.querySelector(sel);if(b)b.onclick=()=>startRun(b,document.querySelector('#status'),p,data())};
+runBtn('#auto','auto',()=>({target}));
 const chain=(sel,steps,wait)=>{const b=document.querySelector(sel);if(!b)return;b.onclick=async()=>{const m=document.querySelector('#status');b.disabled=true;m.textContent=wait;
   try{let j;for(const [p,d] of steps()){j=await post(p,d)}m.textContent=j.note||'Done';setTimeout(()=>location.reload(),700)}catch(x){m.textContent=x.message;b.disabled=false}}};
 const pf=()=>({sources:['funding','hiring'].filter(c=>document.querySelector('#p_s_'+c).checked),keywords:document.querySelector('#p_kw').value,regions:['IN','US','GB','SG'].filter(c=>document.querySelector('#p_r_'+c).checked)});
@@ -161,8 +178,8 @@ chain('#padd',()=>[['adddomains',{domains:document.querySelector('#p_dom').value
 chain('#pplAdd',()=>[['addpeople',{lines:document.querySelector('#pl_lines').value}]],'Adding...');
 document.querySelectorAll('.rmp').forEach(b=>b.onclick=()=>{b.disabled=true;post('removeperson',{domain:b.dataset.d,name:b.dataset.n}).then(()=>location.reload()).catch(x=>{alert(x.message);b.disabled=false})});
 go('#find','shortlist',()=>({}),'Searching Google News and checking homepages, about a minute...');
-go('#go','run',()=>({domains:document.querySelector('#doms').value.split(/[\\s,]+/).filter(Boolean)}),'Running, this takes up to 3 minutes. Keep this tab open.');
-go('#short','run',()=>({shortlist:true}),'Running the next companies from the shortlist, up to 3 minutes. Keep this tab open.');
+runBtn('#go','run',()=>({domains:document.querySelector('#doms').value.split(/[\\s,]+/).filter(Boolean)}));
+runBtn('#short','run',()=>({shortlist:true}));
 const form=()=>{const v=id=>document.querySelector('#'+id).value,csv=id=>v(id);
   return {threshold:v('s_threshold'),stage_penalty:v('s_penalty'),stages:['A','B','C'].filter(x=>document.querySelector('#s_stage_'+x).checked),
    exclude:csv('s_exclude'),limits:{certified:v('s_l_certified'),saas:v('s_l_saas'),stage:v('s_l_stage')},
@@ -183,7 +200,7 @@ _hl = {"t": 0, "v": None}
 
 def hunter_left(fallback):
     """Live Hunter balance (a free call) when a key is set; the snapshot value otherwise. Cached for a minute."""
-    if config.HUNTER_API_KEY and not config.OFFLINE and time.time() - _hl["t"] > 60:
+    if config.HUNTER_API_KEY and not config.offline() and time.time() - _hl["t"] > 60:
         try:
             r = requests.get("https://api.hunter.io/v2/account", params={"api_key": config.HUNTER_API_KEY}, timeout=3).json()
             _hl.update(t=time.time(), v=r["data"]["requests"]["searches"]["remaining"])
@@ -248,7 +265,7 @@ def shell(tab, body, snap, q=""):
     chip = (f'<span class=chip><i></i>Run {len(runs)} <span>{runs[0]["drafted"]} drafted · {ago(runs[0]["ts"])}</span></span>' if runs else
             f'<span class=chip><i></i>{("Last run " + e(snap["generated"][:10])) if snap["generated"] else "No run yet"}</span>')
     return ('<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">'
-            f'<title>Outreach Agent</title><style>{CSS}</style><script>const NEEDPW={"true" if APP_PASSWORD else "false"},CANSEND={"true" if mail_out.can_send() else "false"};</script><div class=app><aside>'
+            f'<title>Outreach Agent</title><style>{CSS}</style><script>const CANSEND={"true" if mail_out.can_send() else "false"};</script><div class=app><aside>'
             '<div class=brand><i></i><div>OUTREACH<small>AGENT</small></div></div>'
             f'<h4>PIPELINE</h4>{link("overview", "Overview")}{link("run", "Run pipeline")}{link("companies", "Companies")}{link("prospects", "Prospects")}{link("data", "My contacts")}{link("method", "Method")}{link("settings", "ICP settings")}'
             f'<h4>HUMAN GATES</h4>{link("review", "Review queue", human)}{link("drafts", "Drafts &amp; sends", drafts)}'
@@ -275,7 +292,7 @@ def overview(snap, run_id="all"):
              ("Dropped", count(rows, "disqualified", "not_qualified"), "a gate failed"),
              ("Hunter left", "-" if hl is None else hl, "searches this month")]
     stat_html = "".join(f"<div><small>{a}</small><b>{b}</b><span>{c}</span></div>" for a, b, c in stats)
-    sent = sum(x["kind"] == "sent" for x in db.events(500)) if db.enabled and not snap.get("db_error") else 0
+    sent = db.sent_since("") if db.enabled and not snap.get("db_error") else 0
     counts = [n, n - count(rows, "failed"), n - count(rows, "failed"), n - count(rows, "failed", "disqualified", "manual_review"),
               count(rows, "drafted", "no_hook"), count(rows, "drafted"), count(rows, "drafted"), count(rows, "drafted"), sent]
     nodes = "".join(f'<div class="node {"h" if h else ""}"><div class=c>{i}</div><b>{t}</b><small>{d}</small><em>{c}</em></div>'
@@ -461,20 +478,11 @@ def method():
             f'<h2 style="margin-top:28px">Five pre-build decisions</h2><div class=box style="margin-top:10px">{dec}</div>')
 
 
-class offline:
-    """Run the pipeline on fixtures. ponytail: flips a module global, so a live run in the same instance could briefly see it; fine at this traffic."""
-    def __enter__(self):
-        self.prev, config.OFFLINE = config.OFFLINE, True
-
-    def __exit__(self, *a):
-        config.OFFLINE = self.prev
-
-
 def run_page(snap, demo):
     out = ""
     if demo:
-        with offline():
-            rows = [run.process(d, str(ROOT / "data/contacts.csv")) for d in (ROOT / "data/domains.txt").read_text().split()]
+        with config.forced_offline():  # this request only; a live run elsewhere is unaffected
+            rows = [run.process(d, contacts.CSV) for d in (ROOT / "data/domains.txt").read_text().split()]
         st = impact.run_stats(rows)
         out = ('<div class=box><h3>Demo run: fictional companies, canned model replies, nothing sent</h3><table>'
                + "".join(f'<tr><td><b>{e(r["domain"])}</b></td><td><span class="pill {STATUS[r["status"]][1]}">{STATUS[r["status"]][0]}</span></td>'
@@ -495,11 +503,12 @@ def run_page(snap, demo):
         try:
             hist = "".join(f"<tr><td><small>{e(x['ts'][:16].replace('T', ' '))}</small></td><td>{x['n']} companies</td><td>{x['drafted']} drafted</td></tr>" for x in db.runs()) \
                 or "<tr><td colspan=3><small>No runs yet.</small></td></tr>"
+            live = job_panel()
         except Exception as ex:
             hist = f"<tr><td colspan=3><small>Database error: {e(str(ex)[:120])}</small></td></tr>"
+            live = ""
         t = current_settings()["target"]
         seg = "".join(f'<button class="{"on" if n == t and n <= 3 else ""}" data-n="{n}">{n}</button>' for n in (1, 2, 3))
-        live = ""
         left = (f'<div class=box style="margin-top:0"><h2>Find companies for me</h2><p class=sub style="margin-bottom:12px">No input needed. It pulls fresh funding news, shortlists companies '
                 'that fit your ICP, and takes each one through research, contact and email until enough qualify. It also runs by itself every Monday.</p>'
                 f'<small class=kicker>Stop after this many qualify</small><div style="margin:6px 0 10px"><span class=seg>{seg}</span></div>'
@@ -515,6 +524,20 @@ def run_page(snap, demo):
             f'{live}<div class=grid2 style="grid-template-columns:3fr 2fr;align-items:start"><div>{left}</div>'
             f'<div class=box style="margin-top:0"><h3>What happens to each company</h3>{what}</div></div>'
             f'<p><a class="btn" href="/?p=run&demo=1">Run the offline demo</a></p>{out}')
+
+
+def job_panel():
+    """The run in progress or paused, with Continue and Stop, so a closed tab or a timed-out step loses nothing."""
+    job = jobs.active() or next((j for j in db.jobs_list(3) if j["status"] == "paused"), None)
+    if not job:
+        return ""
+    left = len(job["queue"])
+    state = ("Searching the news for companies" if job.get("discover") else
+             f'{len(job["done"])} researched, {left} left, {job["qualified"]} qualified')
+    head = "A run is in progress" if job["status"] == "running" else "A run is paused"
+    return (f'<div class=warnbox><b>{head}</b> (started {e(ago(job["id"]))}). {e(state)}. {e(job.get("note") or "")}'
+            f'<div class=row style="margin-top:8px"><button class="btn g" id=cont data-id="{e(job["id"])}">Continue it here</button>'
+            f'<button class=btn id=stop data-id="{e(job["id"])}">Stop it</button></div></div>')
 
 
 def current_settings():
@@ -649,10 +672,10 @@ def page(url):
 
 
 def _limited():
-    """No password is set, so cap spend instead: MAX_RUNS_PER_HOUR runs an hour, for everyone."""
+    """The site has no sign-in, so spend is capped instead: MAX_RUNS_PER_HOUR new runs an hour, for everyone."""
     since = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat(timespec="seconds")
-    if sum(x["ts"] > since for x in db.runs(20)) >= MAX_RUNS_PER_HOUR:
-        return 429, {"error": f"Run limit reached ({MAX_RUNS_PER_HOUR} an hour). Try again later."}
+    if db.jobs_since(since) >= MAX_RUNS_PER_HOUR:
+        return 429, {"error": f"Run limit reached ({MAX_RUNS_PER_HOUR} an hour, to protect credits). Try again later."}
 
 
 def _seeds():
@@ -660,20 +683,8 @@ def _seeds():
     return {**(json.loads(sl.read_text(encoding="utf-8")) if sl.exists() else {}), **db.shortlist()}
 
 
-def _process(domains, seeds, given=None, stop_after=None):
-    """Run the pipeline on domains as one run. stop_after: stop once that many companies qualified."""
-    ts, lessons, rows = db.now(), db.learnings(), []
-    for d in domains:
-        r = run.process(d, str(ROOT / "data/contacts.csv"), False, seeds.get(d), lessons, given)
-        r["run"] = ts
-        r = run.public(r)
-        db.save_company(r)
-        rows.append(r)
-        if stop_after and count(rows, "drafted", "no_contact", "no_hook") >= stop_after:
-            break
-    drafted = count(rows, "drafted")
-    db.add_run(len(rows), drafted, ts)
-    return 200, {"note": f"Done: {len(rows)} companies looked at, {drafted} drafted."}
+def _started(job):
+    return 200, {"job": job, "note": "Started."}
 
 
 def do_run(body):
@@ -683,15 +694,18 @@ def do_run(body):
     seeds = _seeds()
     if body.get("shortlist"):
         have = {r["domain"] for r in db.companies()}
-        domains = [d for d in (db.shortlist() or seeds) if d not in have]
+        domains = [d for d in seeds if d not in have]
     else:
-        domains = [str(d).strip().lower() for d in body.get("domains", [])]
+        raw = body.get("domains")
+        if not isinstance(raw, list):
+            return 400, {"error": "Enter at least one domain."}
+        domains = [_site(d) for d in raw if str(d).strip()]
     domains = list(dict.fromkeys(domains))[:MAX_PER_RUN]
     if not domains:
         return 400, {"error": "No new domains to run. Use Find new companies first."}
     bad = [d for d in domains if not DOMAIN.match(d)]
     if bad:
-        return 400, {"error": "Not a domain name: " + bad[0]}
+        return 400, {"error": "Not a domain name: " + bad[0][:60]}
     given = None  # a reviewer-supplied contact for a single company whose contact Hunter could not find
     c = body.get("contact")
     if isinstance(c, dict) and len(domains) == 1:
@@ -699,11 +713,12 @@ def do_run(body):
         if not name or not title:
             return 400, {"error": "Enter both a name and a title."}
         given = {"name": name, "title": title}
-    return _process(domains, seeds, given)
+    return _started(jobs.start(domains, seeds, given=given))
 
 
 def do_auto(body):
-    """Find companies for me: refresh the shortlist if nothing is waiting, then research until `target` qualify."""
+    """Find companies for me: research what is waiting in the queue (discovering new companies first if nothing is),
+    stopping once `target` qualify."""
     s = current_settings()
     if (err := _limited()):
         return err
@@ -711,16 +726,40 @@ def do_auto(body):
         target = max(1, min(5, int(body.get("target") or s["target"])))
     except (TypeError, ValueError):
         target = s["target"]
-    have = {r["domain"] for r in db.companies()}
-    waiting = [d for d in db.shortlist() if d not in have]
-    if not waiting:
-        found = shortlist.find(15)
-        if found:
-            db.save_shortlist(shortlist.seeds(found))
-        waiting = [d for d in found if d not in have]
-    if not waiting:
-        return 200, {"note": "No new funded companies found right now. Try again later or run specific domains."}
-    return _process(waiting[:MAX_PER_RUN], _seeds(), stop_after=target)
+    return _started(jobs.start_auto(target, _seeds()))
+
+
+def _job_id(body):
+    job_id = str(body.get("id", ""))[:40]
+    if not db.get_job(job_id):
+        raise LookupError("That run no longer exists. Reload the page.")
+    return job_id
+
+
+def do_step(body):
+    current_settings()
+    return 200, {"job": jobs.step(_job_id(body))}
+
+
+def do_resume(body):
+    job = jobs.resume(_job_id(body))
+    return 200, {"job": job}
+
+
+def do_stop(body):
+    return 200, {"job": jobs.stop(_job_id(body))}
+
+
+def cron():
+    """The weekly run: continue a paused or unfinished run, else start a new automatic one; work until the budget is spent."""
+    s = current_settings()
+    job = jobs.active() or next((j for j in db.jobs_list(3) if j["status"] == "paused"), None)
+    if job and job["status"] == "paused":
+        job = jobs.resume(job["id"])
+    if not job:
+        job = jobs.start_auto(s["target"], _seeds())
+    job = jobs.drain(job["id"], CRON_BUDGET)
+    return 200, {"job": {k: job.get(k) for k in ("id", "status", "note", "done", "qualified", "drafted")}}
 
 
 def do_fb(body):
@@ -818,7 +857,7 @@ def do_send(body):
     if not subject or len(text.split()) < 5:
         return 400, {"error": "The subject and body cannot be empty."}
     since = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat(timespec="seconds")
-    if sum(x["kind"] == "sent" and x["ts"] > since for x in db.events(500)) >= MAX_SENDS_PER_DAY:
+    if db.sent_since(since) >= MAX_SENDS_PER_DAY:
         return 429, {"error": f"Daily limit reached ({MAX_SENDS_PER_DAY} emails). Try again tomorrow."}
     try:
         mail_out.deliver(subject, text)
@@ -843,17 +882,62 @@ def do_adddomains(body):
     return 200, {"note": f"Added {len(domains)} to the queue. Run them from the Run page."}
 
 
-ROUTES = {"send": do_send, "addpeople": do_addpeople, "removeperson": do_removeperson, "prospects": do_prospects, "adddomains": do_adddomains, "auto": do_auto, "settings": do_settings, "run": do_run, "fb": do_fb, "learn": do_learn, "shortlist": do_shortlist}
+ROUTES = {"send": do_send, "addpeople": do_addpeople, "removeperson": do_removeperson, "prospects": do_prospects,
+          "adddomains": do_adddomains, "auto": do_auto, "settings": do_settings, "run": do_run, "fb": do_fb,
+          "learn": do_learn, "shortlist": do_shortlist, "step": do_step, "resume": do_resume, "stop": do_stop}
+NEEDS_MODEL = (do_run, do_auto, do_learn, do_step, do_resume)
+
+
+def _log(where):
+    print(f"[outreach] {where} failed:\n{traceback.format_exc()}", file=sys.stderr)  # shows in the Vercel logs
+
+
+def post(path, raw):
+    """(status, JSON body) for an action. Errors are short messages for the page; details go to the logs."""
+    route = ROUTES.get(parse_qs(urlparse(path).query).get("p", [""])[0])
+    if not route:
+        return 404, {"error": "Unknown action."}
+    try:
+        body = json.loads(raw or b"{}")
+    except ValueError:
+        return 400, {"error": "Bad request."}
+    if not isinstance(body, dict):
+        return 400, {"error": "Bad request."}
+    if not db.enabled:
+        return 503, {"error": "No database is connected."}
+    if route in NEEDS_MODEL and not config.API_KEY:
+        return 503, {"error": "GEMINI_API_KEY is not set."}
+    try:
+        return route(body)
+    except jobs.Busy as ex:
+        return 409, {"error": str(ex)}
+    except LookupError as ex:
+        return 404, {"error": str(ex)}
+    except Exception as ex:  # noqa: BLE001
+        _log(f"POST {path}")
+        return 500, {"error": f"Something went wrong ({type(ex).__name__}). Try again in a moment."}
+
+
+ERROR_PAGE = ('<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Outreach Agent</title>'
+              '<body style="font:16px system-ui;margin:40px;max-width:560px"><h1>This page could not load</h1>'
+              '<p>Something went wrong on the server. Reload in a moment, or go back to the <a href="/">overview</a>.</p>')
 
 
 class handler(BaseHTTPRequestHandler):
     def _send(self, code, body, ctype="text/html; charset=utf-8"):
+        data = body if isinstance(body, bytes) else body.encode()
         self.send_response(code)
         self.send_header("Content-Type", ctype)
+        self.send_header("Cache-Control", "no-store")  # every page shows live data
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Content-Length", str(len(data)))
         self.end_headers()
-        self.wfile.write(body if isinstance(body, bytes) else body.encode())
+        self.wfile.write(data)
 
     def do_GET(self):
+        path = urlparse(self.path).path
+        if path in ("/favicon.ico", "/robots.txt", "/apple-touch-icon.png"):
+            return self._send(204, b"", "text/plain")
         try:
             if parse_qs(urlparse(self.path).query).get("p") == ["cron"]:
                 secret = os.getenv("CRON_SECRET", "")
@@ -861,27 +945,19 @@ class handler(BaseHTTPRequestHandler):
                     return self._send(401, json.dumps({"error": "Not allowed."}), "application/json")
                 if not (db.enabled and config.API_KEY):
                     return self._send(503, json.dumps({"error": "Database or Gemini key missing."}), "application/json")
-                code, out = do_auto({})
+                code, out = cron()
                 return self._send(code, json.dumps(out), "application/json")
             self._send(200, page(self.path))
-        except Exception as ex:  # show the failure instead of a blank 500
-            self._send(500, f"error: {ex}")
+        except Exception:  # noqa: BLE001
+            _log(f"GET {self.path}")
+            self._send(500, ERROR_PAGE)
 
     def do_POST(self):
         try:
             n = int(self.headers.get("Content-Length") or 0)
-            body = json.loads(self.rfile.read(min(n, 60_000)) or b"{}")
-            route = ROUTES.get(parse_qs(urlparse(self.path).query).get("p", [""])[0])
-            if not route:
-                code, out = 404, {"error": "Unknown action."}
-            elif APP_PASSWORD and not hmac.compare_digest(str(body.get("token", "")), APP_PASSWORD):
-                code, out = 401, {"error": "Wrong or missing access password."}
-            elif not db.enabled:
-                code, out = 503, {"error": "No database is connected."}
-            elif route in (do_run, do_auto, do_learn) and not config.API_KEY:
-                code, out = 503, {"error": "GEMINI_API_KEY is not set."}
-            else:
-                code, out = route(body)
-        except Exception as ex:
-            code, out = 500, {"error": str(ex)[:200]}
+        except ValueError:
+            n = 0
+        if n > 60_000:
+            return self._send(413, json.dumps({"error": "Too much text in one request."}), "application/json")
+        code, out = post(self.path, self.rfile.read(n) if n else b"")
         self._send(code, json.dumps(out), "application/json")
