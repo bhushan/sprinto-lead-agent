@@ -11,12 +11,15 @@ import llm
 import scrape
 
 PROMPT = """Sprinto sells compliance automation (SOC 2, ISO 27001, GDPR) to B2B SaaS companies at
-Series A-C that are preparing for an audit or are pressed by enterprise customers to get
+{stages} that are preparing for an audit or are pressed by enterprise customers to get
 certified. Score this company's ICP fit from 0 to 100 and explain in one sentence that cites
 the facts. Return JSON: score, reason.
 
 FACTS: {facts}
 GAPS: {flags}"""
+
+
+STAGES_TEXT = "Series A, Series B, Series C"  # set from settings
 
 
 def _stage_known(f):
@@ -68,7 +71,7 @@ def qualify(domain, home_text, seed=None):
 
     for q in QUESTIONS:
         notes, tries = [], 0
-        while not _dead(facts) and not q["done"](facts) and tries < q["limit"]:
+        while not _dead(facts) and not q["done"](facts) and tries < min(q["limit"], len(q["paths"])):
             page = q["paths"][tries]
             tries += 1
             fetches += 1
@@ -89,6 +92,6 @@ def qualify(domain, home_text, seed=None):
         if not answered:
             flags.append(f"{q['ask']} unanswered: {q['if_unanswered']}")
 
-    ans = llm.ask("qualify", domain, PROMPT.format(facts=json.dumps(facts), flags="; ".join(flags) or "none"))
+    ans = llm.ask("qualify", domain, PROMPT.format(stages=STAGES_TEXT, facts=json.dumps(facts), flags="; ".join(flags) or "none"))
     score = ans["score"] - (config.STAGE_UNKNOWN_PENALTY if not _stage_known(facts) else 0)
     return result("qualified" if score >= config.QUALIFY_THRESHOLD else "not_qualified", ans["reason"], score)

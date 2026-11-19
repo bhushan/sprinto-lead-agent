@@ -31,4 +31,13 @@ assert db.learnings() == ["c"]
 assert run.process("finlytic.example")["facts"]["company_name"] == "Finlytic"
 import drafts
 assert drafts.company("hyphenate.ai", {}) == "Hyphenate"
+import settings  # ICP settings: bad input is rejected, a stricter threshold changes the outcome, defaults restore it
+try:
+    settings.validate({**settings.DEFAULTS, "threshold": 150}); raise SystemExit("threshold 150 was accepted")
+except ValueError:
+    pass
+settings.apply(settings.validate({**settings.DEFAULTS, "threshold": 90}))
+assert run.process("finlytic.example")["status"] == "not_qualified"
+settings.apply(settings.DEFAULTS)
+assert run.process("finlytic.example")["status"] == "drafted"
 print("ok")

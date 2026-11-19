@@ -81,3 +81,11 @@ Needed in the Vercel project's environment variables:
   "Learn from feedback" asks the model for at most 5 style rules from the last 20 events and stores them. Every
   new draft (CLI or web) is written with those rules in its prompt.
 - Locally, set `SQLITE_PATH=/tmp/outreach.db` to try the same code on SQLite.
+
+## ICP settings
+
+The ICP settings page (stored in the database) changes, without code: the score needed to draft, the penalty for an
+unknown funding stage, which funding stages count, sectors to skip in Find new companies, how many pages each
+Evidence Map question may fetch, the job-title words used to pick the contact, and the sender name. They apply to the
+next run. `settings.py` holds the defaults and the validation. Anyone who can open the site can change them, so add
+sign-in before sharing the address widely.

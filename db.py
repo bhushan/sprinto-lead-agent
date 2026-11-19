@@ -14,6 +14,7 @@ SCHEMA = [
     "create table if not exists learnings(ts text, rule text)",
     "create table if not exists runs(ts text, n integer, drafted integer)",
     "create table if not exists shortlist(domain text primary key, data text)",
+    "create table if not exists settings(key text primary key, data text, updated text)",
 ]
 _ready = False
 
@@ -95,3 +96,17 @@ def save_shortlist(seeds):
 
 def shortlist():
     return {d: json.loads(x) for d, x in _sql("select domain, data from shortlist")}
+
+
+def get_settings():
+    r = _sql("select data from settings where key = ?", ("icp",))
+    return json.loads(r[0][0]) if r else None
+
+
+def set_settings(s):
+    """s: validated settings dict, or None to go back to the defaults."""
+    if s is None:
+        _sql("delete from settings where key = ?", ("icp",))
+    else:
+        _sql("insert into settings(key, data, updated) values(?, ?, ?) on conflict(key) do update set "
+             "data = excluded.data, updated = excluded.updated", ("icp", json.dumps(s), _now()))

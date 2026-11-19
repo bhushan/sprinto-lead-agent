@@ -29,6 +29,7 @@ import drafts as drafts_mod  # noqa: E402
 import impact  # noqa: E402
 import qualify  # noqa: E402
 import run  # noqa: E402
+import settings  # noqa: E402
 import shortlist  # noqa: E402
 
 config.OFFLINE = not config.API_KEY  # live whenever a Gemini key is configured
@@ -92,6 +93,7 @@ td{padding:12px 10px;border-top:1px solid var(--line);vertical-align:top}tr.l{cu
 pre{white-space:pre-wrap;font:14px/1.6 ui-monospace,Consolas,monospace;margin:0}.back{color:var(--mute);font-size:14px}
 input.t,textarea.t{width:100%;border:1px solid var(--line);border-radius:10px;padding:9px 12px;font:inherit;background:#fff;margin:4px 0 8px}textarea.t{min-height:190px;font:14px/1.6 ui-monospace,Consolas,monospace}
 textarea.dom{min-height:110px}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.ok-t{color:var(--green-d);font-weight:600;font-size:13px}
+.box>label{display:block;font-size:13px;color:var(--mute);margin-top:8px}
 .warnbox{background:#fffaf0;border:1px solid #f6d49a;color:#7a4a05;border-radius:12px;padding:12px 14px;margin:14px 0;font-size:14px}
 @media(max-width:860px){.app{grid-template-columns:1fr}aside{position:static;height:auto}.grid2{grid-template-columns:1fr}.fun div{grid-template-columns:100px 1fr 30px}main{padding:18px}.top{padding:12px 18px}}
 """
@@ -127,6 +129,12 @@ document.querySelectorAll('.act').forEach(b=>{b.onclick=()=>{const c=b.closest('
 go('#find','shortlist',()=>({}),'Searching Google News and checking homepages, about a minute...');
 go('#go','run',()=>({domains:document.querySelector('#doms').value.split(/[\\s,]+/).filter(Boolean)}),'Running, this takes up to 3 minutes. Keep this tab open.');
 go('#short','run',()=>({shortlist:true}),'Running the next companies from the shortlist, up to 3 minutes. Keep this tab open.');
+const form=()=>{const v=id=>document.querySelector('#'+id).value,csv=id=>v(id);
+  return {threshold:v('s_threshold'),stage_penalty:v('s_penalty'),stages:['A','B','C'].filter(x=>document.querySelector('#s_stage_'+x).checked),
+   exclude:csv('s_exclude'),limits:{certified:v('s_l_certified'),saas:v('s_l_saas'),stage:v('s_l_stage')},
+   roles:{security:csv('s_r_security'),engineering:csv('s_r_engineering'),founder:csv('s_r_founder')},sender:v('s_sender')}};
+go('#savecfg','settings',()=>({settings:form()}),'Saving...');
+go('#resetcfg','settings',()=>({reset:true}),'Resetting to defaults...');
 go('#learn','learn',()=>({}),'Learning from your edits and ratings...');
 """
 
@@ -187,7 +195,7 @@ def shell(tab, body, snap, q=""):
     return ('<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">'
             f'<title>Outreach Agent</title><style>{CSS}</style><script>const NEEDPW={"true" if APP_PASSWORD else "false"};</script><div class=app><aside>'
             '<div class=brand><i></i><div>OUTREACH<small>AGENT</small></div></div>'
-            f'<h4>PIPELINE</h4>{link("overview", "Overview")}{link("run", "Run pipeline")}{link("companies", "Companies")}{link("method", "Method")}'
+            f'<h4>PIPELINE</h4>{link("overview", "Overview")}{link("run", "Run pipeline")}{link("companies", "Companies")}{link("method", "Method")}{link("settings", "ICP settings")}'
             f'<h4>HUMAN GATES</h4>{link("review", "Review queue", human)}{link("drafts", "Drafts &amp; sends", drafts)}'
             f'<h4>LEARNING</h4>{link("feedback", "Feedback loop")}'
             '<div class=note>The model reads and writes. Python rules decide. Every draft waits for you.<br><br>Case study build, not affiliated with Sprinto.</div></aside>'
@@ -365,7 +373,7 @@ def method():
             '<p class=sub>Code decides, the model reads. The model fills named fields; Python checks them, picks the next page, '
             'stops at the limit, and hands over to a human when unsure.</p>'
             f'<div class=box><h3>Evidence Map (the live rules)</h3><table><tr><th>Question</th><th>Look at</th><th>Fetch limit</th><th>If unanswered</th></tr>{ev}</table>'
-            '<small>Worst case: 4 page fetches beyond the homepage. A quote that is not on the page is dropped and counted.</small></div>'
+            f'<small>Worst case: {sum(q["limit"] for q in qualify.QUESTIONS)} page fetches beyond the homepage (change in ICP settings). A quote that is not on the page is dropped and counted.</small></div>'
             f'<h2 style="margin-top:28px">The nine checks</h2><div class=grid2 style="margin-top:10px">{nine}</div>'
             f'<h2 style="margin-top:28px">Five pre-build decisions</h2><div class=box style="margin-top:10px">{dec}</div>')
 
@@ -413,9 +421,53 @@ def run_page(snap, demo):
             f'{live}<p><a class="btn" href="/?p=run&demo=1">Run the offline demo</a></p>{out}')
 
 
+def current_settings():
+    """Stored settings (or defaults), applied to the pipeline modules for this request."""
+    stored = None
+    if db.enabled:
+        try:
+            stored = db.get_settings()
+        except Exception:
+            pass
+    s = settings.effective(stored)
+    settings.apply(s)
+    return s
+
+
+def settings_page(snap):
+    s = current_settings()
+    editable = db.enabled and not snap.get("db_error")
+    dis = "" if editable else "disabled"
+    num = lambda i, v, lo, hi: f'<input class=t id={i} type=number min={lo} max={hi} value="{v}" style="max-width:120px" {dis}>'
+    txt = lambda i, v, rows=2: f'<textarea class="t" id={i} style="min-height:{rows * 30}px;font:14px/1.5 inherit" {dis}>{e(", ".join(v))}</textarea>'
+    stages = "".join(f'<label style="margin-right:14px"><input type=checkbox id=s_stage_{x} {"checked" if x in s["stages"] else ""} {dis}> Series {x}</label>' for x in "ABC")
+    lim = s["limits"]
+    note = "" if editable else '<div class=warnbox>Settings can only be changed once a database is connected. Showing the defaults.</div>'
+    return ('<div class=kicker>Configure</div><h1>ICP settings</h1>'
+            '<p class=sub>Who counts as a good fit, how hard the pipeline looks, and who it writes to. Changes apply to the next run and to Find new companies.</p>'
+            f'{note}<div class=grid2><div class=box style="margin-top:0"><h3>Qualifying</h3>'
+            f'<label>Score needed to draft an email (0 to 100)</label>{num("s_threshold", s["threshold"], 0, 100)}'
+            f'<label>Points taken off when the funding stage is unknown</label>{num("s_penalty", s["stage_penalty"], 0, 30)}'
+            f'<label>Funding stages in the ICP</label><div style="margin:6px 0 4px">{stages}</div></div>'
+            f'<div class=box style="margin-top:0"><h3>How hard it looks (page fetches per question)</h3>'
+            f'<label>Already certified? (trust and security pages, max 2)</label>{num("s_l_certified", lim["certified"], 0, 2)}'
+            f'<label>B2B SaaS? (product and about pages, max 2)</label>{num("s_l_saas", lim["saas"], 0, 2)}'
+            f'<label>Right stage? (careers, pricing, customers, max 3)</label>{num("s_l_stage", lim["stage"], 0, 3)}</div></div>'
+            f'<div class=box><h3>Sectors to leave out of Find new companies</h3>{txt("s_exclude", s["exclude"], 3)}'
+            '<small>Comma separated. A headline containing any of these is skipped.</small></div>'
+            f'<div class=box><h3>Who to write to, best match first</h3>'
+            f'<label>1. Security and compliance owners</label>{txt("s_r_security", s["roles"]["security"])}'
+            f'<label>2. Engineering leaders</label>{txt("s_r_engineering", s["roles"]["engineering"])}'
+            f'<label>3. Founders (used first at companies under 50 people)</label>{txt("s_r_founder", s["roles"]["founder"])}'
+            '<small>Job-title words separated by commas. "vp engineering" also matches "VP of Engineering". Titles that match none of these are never chosen.</small></div>'
+            f'<div class=box><h3>Email sender name</h3><input class=t id=s_sender value="{e(s["sender"])}" style="max-width:260px" {dis}></div>'
+            f'<p><button class="btn g" id=savecfg {dis}>Save settings</button> <button class=btn id=resetcfg {dis}>Reset to defaults</button> <span class=ok-t id=status></span></p>')
+
+
 def page(url):
     q = {k: v[0] for k, v in parse_qs(urlparse(url).query).items()}
     tab, snap = q.get("p", "overview"), load()
+    current_settings()
     if tab == "companies":
         return shell("companies", companies(snap, q.get("f", "all"), q.get("q", "")), snap, q.get("q", ""))
     if tab == "company":
@@ -426,6 +478,8 @@ def page(url):
         return shell("drafts", drafts(snap), snap)
     if tab == "feedback":
         return shell("feedback", feedback(snap), snap)
+    if tab == "settings":
+        return shell("settings", settings_page(snap), snap)
     if tab == "method":
         return shell("method", method(), snap)
     if tab == "run":
@@ -434,6 +488,7 @@ def page(url):
 
 
 def do_run(body):
+    current_settings()
     # no password is set, so cap spend instead: at most MAX_RUNS_PER_HOUR runs an hour, for everyone
     since = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat(timespec="seconds")
     if sum(x["ts"] > since for x in db.runs(20)) >= MAX_RUNS_PER_HOUR:
@@ -490,6 +545,7 @@ def do_learn(body):
 
 
 def do_shortlist(body):
+    current_settings()
     found = shortlist.find(15)
     if not found:
         return 200, {"note": "Google News returned no usable companies right now. Try again later."}
@@ -497,7 +553,18 @@ def do_shortlist(body):
     return 200, {"note": f"Found {len(found)} recently funded companies."}
 
 
-ROUTES = {"run": do_run, "fb": do_fb, "learn": do_learn, "shortlist": do_shortlist}
+def do_settings(body):
+    if body.get("reset"):
+        db.set_settings(None)
+        return 200, {"note": "Back to the defaults."}
+    try:
+        db.set_settings(settings.validate(body.get("settings")))
+    except ValueError as ex:
+        return 400, {"error": str(ex)}
+    return 200, {"note": "Saved. The next run uses these settings."}
+
+
+ROUTES = {"settings": do_settings, "run": do_run, "fb": do_fb, "learn": do_learn, "shortlist": do_shortlist}
 
 
 class handler(BaseHTTPRequestHandler):
