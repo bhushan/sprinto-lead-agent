@@ -243,7 +243,7 @@ def load():
 def live_missing():
     """What is still needed before the browser can run the pipeline."""
     return [name for name, ok in (("DATABASE_URL (the Neon connection string)", db.enabled),
-                                  ("GEMINI_API_KEY", bool(config.API_KEY))) if not ok]
+                                  ("GEMINI_API_KEY or OPENROUTER_API_KEY", bool(config.API_KEY))) if not ok]
 
 
 def tier_of(r):
@@ -1013,7 +1013,7 @@ def post(path, raw):
     if not db.enabled:
         return 503, {"error": "No database is connected."}
     if route in NEEDS_MODEL and not config.API_KEY:
-        return 503, {"error": "GEMINI_API_KEY is not set."}
+        return 503, {"error": "No model key is set (GEMINI_API_KEY or OPENROUTER_API_KEY)."}
     try:
         return route(body)
     except jobs.Busy as ex:
@@ -1053,7 +1053,7 @@ class handler(BaseHTTPRequestHandler):
                 if not secret or not hmac.compare_digest(self.headers.get("Authorization", ""), f"Bearer {secret}"):
                     return self._send(401, json.dumps({"error": "Not allowed."}), "application/json")
                 if not (db.enabled and config.API_KEY):
-                    return self._send(503, json.dumps({"error": "Database or Gemini key missing."}), "application/json")
+                    return self._send(503, json.dumps({"error": "Database or model key missing."}), "application/json")
                 code, out = cron()
                 return self._send(code, json.dumps(out), "application/json")
             self._send(200, page(self.path))

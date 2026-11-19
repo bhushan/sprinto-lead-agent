@@ -217,4 +217,32 @@ assert "CRM log" in html and "zenstack.example" in html
 db.add_event("orbitdocs.example", "sent", {"subject": "x"}, ts=old)
 code, out = app.post("/?p=followups", b"{}")  # drafts every due follow-up; orbitdocs has no stored draft, so it is skipped
 assert code == 200 and out["note"].startswith("0 follow-ups drafted"), out
+# 13. An OpenRouter key (sk-or-...) sends the same prompts to the Gemini model through OpenRouter
+import requests as _rq  # noqa: E402
+
+
+class _R:
+    def __init__(self, code, payload):
+        self.status_code, self._p = code, payload
+
+    def json(self):
+        return self._p
+
+
+calls = []
+replies = [_R(429, {}), _R(200, {"choices": [{"message": {"content": '```json\n{"score": 80, "reason": "fits"}\n```'}}]})]
+real_post, real_waits = _rq.post, llm.RETRY_WAITS
+_rq.post = lambda url, **kw: (calls.append((url, kw["json"]["model"], kw["headers"]["Authorization"][:13])), replies.pop(0))[1]
+llm.RETRY_WAITS = (0, 0)
+config.API_KEY, config.MODEL = "sk-or-v1-test", "gemini-3.6-flash"
+with config.forced_offline(False):
+    assert llm.ask("qualify", "x.com", "prompt") == {"score": 80, "reason": "fits"}  # retried the 429, fences stripped
+    assert calls[-1][0].endswith("/chat/completions") and calls[-1][1] == "google/gemini-3.6-flash" and calls[-1][2] == "Bearer sk-or-"
+    _rq.post = lambda url, **kw: _R(402, {"error": {"message": "Insufficient credits"}})
+    try:
+        llm.ask("qualify", "x.com", "prompt")
+        raise SystemExit("402 was not ModelUnavailable")
+    except llm.ModelUnavailable as ex:
+        assert "credits" in str(ex)
+_rq.post, llm.RETRY_WAITS, config.API_KEY = real_post, real_waits, ""
 print("ok")

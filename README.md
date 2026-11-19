@@ -91,7 +91,7 @@ a weekly Vercel Cron.
 | Variable | Why |
 |---|---|
 | `DATABASE_URL` | Neon Postgres. Add Neon from the Vercel Marketplace (Storage tab) and it is set for you |
-| `GEMINI_API_KEY` | Live runs and learning. `GEMINI_MODEL` overrides the model |
+| `GEMINI_API_KEY` or `OPENROUTER_API_KEY` | Live runs and learning. A Google key calls Gemini directly; an OpenRouter key (`sk-or-...`) sends the same prompts to the same Gemini model through OpenRouter. `GEMINI_MODEL` overrides the model (default `gemini-3.6-flash`) |
 | `HUNTER_API_KEY` | Contacts for live runs (one search per company that qualifies) |
 | `TO_ADDRESS`, `GMAIL_APP_PASSWORD` | Optional. Send approved drafts to your own inbox (Google app password, needs 2-step verification). Without them the button opens your mail app |
 | `CRON_SECRET` | Set. Vercel sends it to the weekly run |

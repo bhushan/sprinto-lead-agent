@@ -24,7 +24,7 @@ def forced_offline(flag=True):
     finally:
         _forced.reset(token)
 
-API_KEY = os.getenv("GEMINI_API_KEY", "")
+API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("OPENROUTER_API_KEY", "")  # an sk-or- key goes through OpenRouter
 HUNTER_API_KEY = os.getenv("HUNTER_API_KEY", "")  # Option A for step 4; empty = use data/contacts.csv (Option B)
 MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 TEMPERATURE = 0.3
