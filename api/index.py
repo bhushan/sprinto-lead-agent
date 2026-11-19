@@ -246,7 +246,7 @@ def overview(snap, run_id="all"):
         f'<option value="{e(x["ts"])}" {"selected" if run_id == x["ts"] else ""}>Run {len(runs) - i} · {e(x["ts"][:10])}</option>' for i, x in enumerate(runs)) \
         + f'<option value="earlier" {"selected" if run_id == "earlier" else ""}>Earlier (imported)</option>'
     stats = [("Pool", len(all_rows), f'{snap.get("unseen", 0)} still unseen'), ("Researched", n - count(rows, "failed"), "pages read"),
-             ("Qualified", f'{fit} <em>/ {target}</em>', "fit score at or above the threshold"), ("Flagged", human, "waiting on a human"),
+             ("Qualified", f'{fit}' + (f' <em>/ {target}</em>' if run_id != "all" else ""), "fit score at or above the threshold"), ("Flagged", human, "waiting on a human"),
              ("Dropped", count(rows, "disqualified", "not_qualified"), "a gate failed"),
              ("Hunter left", "-" if hl is None else hl, "searches this month")]
     stat_html = "".join(f"<div><small>{a}</small><b>{b}</b><span>{c}</span></div>" for a, b, c in stats)
@@ -270,7 +270,7 @@ def overview(snap, run_id="all"):
             '<p class=sub>Funded SaaS companies, shortlisted by rules, researched in batches, qualified in Python and drafted automatically when nothing needs a human.</p>'
             f'<div class=statgrid>{stat_html}</div>'
             f'<div class=box><span class=legend><i style="background:var(--blue)"></i>automatic<i style="background:var(--green)"></i>human gate</span>'
-            f'<h3>The case pipeline</h3><h2>Seven steps from a domain to an email in your inbox.</h2><div class=nodes>{nodes}</div></div>'
+            f'<h3>The case pipeline</h3><h2>From funding news to an email in your inbox.</h2><div class=nodes>{nodes}</div></div>'
             f'<div class=grid2><div class=box><h3>Why companies dropped</h3>{drop_html}</div>'
             f'<div class=box><h3>Companies in this view</h3><table>{here}</table><p><a class=back href="/?p=companies">All companies</a></p></div></div>')
 
