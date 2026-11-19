@@ -58,4 +58,38 @@ settings.apply(settings.DEFAULTS)
 assert shortlist.queries() == shortlist.QUERIES
 db.save_shortlist({"a.com": {"funding_stage": "Series A"}}); db.save_shortlist({"a.com": {}, "b.com": {}}, keep_existing=True)
 assert db.shortlist() == {"a.com": {"funding_stage": "Series A"}, "b.com": {}}
+import drafts  # draft check, hook choice
+ok_mail = {"subject": "SOC 2 at Finlytic", "body": "Hi Rhea,\n\nFinlytic's customers want SOC 2 reports. Would a short call help? " + "word " * 25 + "\n\nPiyush"}
+assert drafts.check(ok_mail, {"name": "Rhea Menon"}, "Finlytic", "") == []
+bad = drafts.check({"subject": "x", "body": "Dear team, we will revolutionize your 500% growth! [name]"}, {"name": "Rhea Menon"}, "Finlytic", "")
+assert len(bad) >= 6, bad
+claim = dict(ok_mail, body=ok_mail["body"].replace("Would a short", "Missing formal security certifications hurts. Would a short"))
+assert any("not verified" in p for p in drafts.check(claim, {"name": "Rhea Menon"}, "Finlytic", ""))
+assert drafts.pick_hook({"compliance_signals": ["we love cats", "Enterprise customers require SOC 2 audit"]}).startswith("Enterprise")
+assert drafts.pick_hook({"compliance_signals": [], "funding_source": "Raised a Series A"}) == "Raised a Series A"
+import smtplib, send as mail_out, config as cfg  # real sending is tested against a fake Gmail connection
+
+
+class FakeGmail:
+    sent, creds = [], None
+
+    def __init__(self, *a, **k): pass
+    def __enter__(self): return self
+    def __exit__(self, *a): pass
+    def login(self, u, p): FakeGmail.creds = (u, p)
+    def send_message(self, m): FakeGmail.sent.append(m)
+
+
+real_ssl, real_to = smtplib.SMTP_SSL, cfg.TO_ADDRESS
+smtplib.SMTP_SSL = FakeGmail
+os.environ["GMAIL_APP_PASSWORD"] = "app-pw"
+cfg.TO_ADDRESS = "owner@gmail.com"
+assert mail_out.can_send()
+mail_out.deliver("Hello\nthere", "body")
+m = FakeGmail.sent[0]
+assert (m["To"], m["From"], m["Subject"]) == ("owner@gmail.com", "owner@gmail.com", "Hello there") and FakeGmail.creds == ("owner@gmail.com", "app-pw")
+cfg.TO_ADDRESS = "someone@example.com"
+assert not mail_out.can_send()
+smtplib.SMTP_SSL, cfg.TO_ADDRESS = real_ssl, real_to
+os.environ.pop("GMAIL_APP_PASSWORD")
 print("ok")

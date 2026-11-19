@@ -109,3 +109,14 @@ the queue, and the Monday run uses the same keywords. The built-in SaaS search i
 The My contacts page stores people you already know (website, name, title, optional email). When the pipeline
 researches a company with your contacts, it writes to the best-fitting one and spends no Hunter search; other
 companies still use Hunter. Emails are stored but never rendered on the site.
+
+## Email quality and sending
+
+- **Hook:** the quote closest to audits or customer pressure is used; the funding news only when the pages gave none.
+- **Check:** every draft is checked in code: addressed by first name, mentions the company, under about 90 words,
+  one soft question, no stock phrases, no exclamation marks or placeholders, no numbers that are not in the facts,
+  and no claim that the company lacks a certification (that is never verified). A failing draft is rewritten once
+  with the problems named; if it still fails it is flagged "Check before sending" and goes to the Review queue.
+- **Send from the site:** set `TO_ADDRESS` (your own address) and `GMAIL_APP_PASSWORD` (a Google app password, needs
+  2-step verification) as Vercel environment variables. "Approve & send" then emails the draft to your own inbox,
+  never to the prospect, at most 10 a day, and shows only a masked address. Without them the button opens your mail app.

@@ -29,6 +29,7 @@ import drafts as drafts_mod  # noqa: E402
 import impact  # noqa: E402
 import qualify  # noqa: E402
 import run  # noqa: E402
+import send as mail_out  # noqa: E402
 import settings  # noqa: E402
 import shortlist  # noqa: E402
 
@@ -36,6 +37,7 @@ config.OFFLINE = not config.API_KEY  # live whenever a Gemini key is configured
 APP_PASSWORD = os.getenv("APP_PASSWORD", "")
 DOMAIN = re.compile(r"^(?=.{4,100}$)([a-z0-9-]+\.)+[a-z]{2,}$")  # rejects IPs and localhost
 MAX_PER_RUN = 5  # ~30 s per company; stays inside the 300 s function limit
+MAX_SENDS_PER_DAY = 10  # sending is locked to your own address; this stops a loop from filling your inbox
 MAX_RUNS_PER_HOUR = 3  # protects Gemini and Hunter credits when APP_PASSWORD is not set
 
 STATUS = {  # label, css class
@@ -122,11 +124,14 @@ const post=(p,data)=>fetch('/?p='+p,{method:'POST',headers:{'Content-Type':'appl
 document.querySelectorAll('.draft').forEach(d=>{
   const id=d.dataset.d,sub=d.querySelector('.sub-in'),body=d.querySelector('.body-in'),msg=d.querySelector('.msg');
   const saved=G('draft:'+id);if(saved){try{const o=JSON.parse(saved);sub.value=o.s;body.value=o.b}catch(e){}}
-  if(G('sent:'+id)){msg.textContent='Approved and opened in your mail app'}
+  if(G('sent:'+id)){msg.textContent='Approved earlier'}
   const save=()=>S('draft:'+id,JSON.stringify({s:sub.value,b:body.value}));sub.oninput=body.oninput=()=>{save();msg.textContent='Edit saved in this browser'};
-  d.querySelector('.send').onclick=()=>{save();S('sent:'+id,'1');msg.textContent='Approved and opened in your mail app';
-    post('fb',{domain:id,kind:'edit',data:{before:{subject:sub.defaultValue,body:body.defaultValue},after:{subject:sub.value,body:body.value}}}).catch(()=>{});
-    location.href='mailto:?subject='+encodeURIComponent(sub.value)+'&body='+encodeURIComponent(body.value)};
+  d.querySelector('.send').onclick=()=>{save();const edit={domain:id,kind:'edit',data:{before:{subject:sub.defaultValue,body:body.defaultValue},after:{subject:sub.value,body:body.value}}};
+    if(!CANSEND){S('sent:'+id,'1');msg.textContent='Approved and opened in your mail app';post('fb',edit).catch(()=>{});
+      location.href='mailto:?subject='+encodeURIComponent(sub.value)+'&body='+encodeURIComponent(body.value);return}
+    const b=d.querySelector('.send');b.disabled=true;msg.textContent='Sending...';
+    post('send',{domain:id,subject:sub.value,body:body.value}).then(j=>{S('sent:'+id,'1');msg.textContent=j.note;post('fb',edit).catch(()=>{})})
+      .catch(x=>{msg.textContent=x.message}).finally(()=>{b.disabled=false})};
   d.querySelector('.copy').onclick=()=>{navigator.clipboard&&navigator.clipboard.writeText(sub.value+'\\n\\n'+body.value);msg.textContent='Copied'};
   [['.up',1],['.down',-1]].forEach(([c,v])=>d.querySelector(c).onclick=()=>post('fb',{domain:id,kind:'rating',data:{value:v,hook:d.dataset.hook}})
     .then(()=>msg.textContent='Thanks, saved to the feedback loop').catch(x=>msg.textContent=x.message));
@@ -231,7 +236,7 @@ def shell(tab, body, snap, q=""):
     chip = (f'<span class=chip><i></i>Run {len(runs)} <span>{runs[0]["drafted"]} drafted · {ago(runs[0]["ts"])}</span></span>' if runs else
             f'<span class=chip><i></i>{("Last run " + e(snap["generated"][:10])) if snap["generated"] else "No run yet"}</span>')
     return ('<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">'
-            f'<title>Outreach Agent</title><style>{CSS}</style><script>const NEEDPW={"true" if APP_PASSWORD else "false"};</script><div class=app><aside>'
+            f'<title>Outreach Agent</title><style>{CSS}</style><script>const NEEDPW={"true" if APP_PASSWORD else "false"},CANSEND={"true" if mail_out.can_send() else "false"};</script><div class=app><aside>'
             '<div class=brand><i></i><div>OUTREACH<small>AGENT</small></div></div>'
             f'<h4>PIPELINE</h4>{link("overview", "Overview")}{link("run", "Run pipeline")}{link("companies", "Companies")}{link("prospects", "Prospects")}{link("data", "My contacts")}{link("method", "Method")}{link("settings", "ICP settings")}'
             f'<h4>HUMAN GATES</h4>{link("review", "Review queue", human)}{link("drafts", "Drafts &amp; sends", drafts)}'
@@ -258,7 +263,7 @@ def overview(snap, run_id="all"):
              ("Dropped", count(rows, "disqualified", "not_qualified"), "a gate failed"),
              ("Hunter left", "-" if hl is None else hl, "searches this month")]
     stat_html = "".join(f"<div><small>{a}</small><b>{b}</b><span>{c}</span></div>" for a, b, c in stats)
-    sent = sum(x["kind"] == "edit" for x in db.events(500)) if db.enabled and not snap.get("db_error") else 0
+    sent = sum(x["kind"] == "sent" for x in db.events(500)) if db.enabled and not snap.get("db_error") else 0
     counts = [n, n - count(rows, "failed"), n - count(rows, "failed"), n - count(rows, "failed", "disqualified", "manual_review"),
               count(rows, "drafted", "no_hook"), count(rows, "drafted"), count(rows, "drafted"), count(rows, "drafted"), sent]
     nodes = "".join(f'<div class="node {"h" if h else ""}"><div class=c>{i}</div><b>{t}</b><small>{d}</small><em>{c}</em></div>'
@@ -348,23 +353,26 @@ def review(snap):
         f'<div class=box><div class=row><b>{e(r["domain"])}</b><span class="pill warn">{e(r["status"].replace("_", " "))}</span>'
         f'<a class=btn style="margin-left:auto" href="/?p=company&d={quote(r["domain"])}">Open</a>'
         f'<button class="btn resolve" data-d="{e(r["domain"])}">Mark resolved</button></div>'
-        f'<p style="margin:8px 0 4px">{e(r["reason"])}</p><div class=q><b>Do this:</b> {e(TODO.get(r["status"], ""))}</div>{action(r)}</div>' for r in rows)
+        f'<p style="margin:8px 0 4px">{e(r["reason"])}</p><div class=q><b>Do this:</b> {e(TODO.get(r["status"]) or "; ".join(r.get("flags", [])) or "Check this company.")}</div>{action(r)}</div>' for r in rows)
     return ('<div class=kicker>Human gate</div><h1>Review queue</h1><p class=sub>Companies the rules could not settle. '
             'Nothing here is guessed: each one waits for a person.</p>' + (cards or '<div class=box>Nothing is waiting on you.</div>'))
 
 
 def drafts(snap):
     rows = [r for r in snap["rows"] if r.get("body")]
+    warn = lambda r: "".join(f'<div class=warnbox style="margin:8px 0">{e(x)}</div>' for x in r.get("flags", []) if x.startswith("Check before sending"))
     cards = "".join(
         f'<div class="box draft" data-d="{e(r["domain"])}" data-hook="{e(r["hook"][:200])}"><div class=row><b>{e(r["contact"]["name"])}</b><small>{e(r["contact"]["title"])} at {e(r["domain"])}</small>'
         f'<a class=btn style="margin-left:auto" href="/?p=company&d={quote(r["domain"])}">Why this email</a></div>'
-        f'<small>Hook: {e(r["hook"])}</small>'
+        f'<small>Hook: {e(r["hook"])}</small>{warn(r)}'
         f'<input class="t sub-in" value="{e(r["subject"])}"><textarea class="t body-in">{e(r["body"])}</textarea>'
         '<div class=row><button class="btn g send">Approve &amp; send</button><button class="btn copy">Copy</button>'
         '<button class="btn up" title="Good draft">Good</button><button class="btn down" title="Poor draft">Poor</button><span class="ok-t msg"></span></div></div>'
         for r in rows)
-    return ('<div class=kicker>Human gate</div><h1>Drafts &amp; sends</h1><p class=sub>Edit a draft, then approve it. '
-            '"Approve &amp; send" opens your own mail app with the text filled in, so mail goes out from your account and nothing is sent from this site. '
+    to = config.TO_ADDRESS
+    how = (f'"Approve &amp; send" emails the draft to your own inbox ({e(to[:1])}***@{e(to.split("@")[-1])}), never to the prospect, up to {MAX_SENDS_PER_DAY} a day. '
+           if mail_out.can_send() else '"Approve &amp; send" opens your own mail app with the text filled in; nothing is sent from this site. ')
+    return ('<div class=kicker>Human gate</div><h1>Drafts &amp; sends</h1><p class=sub>Edit a draft, then approve it. ' + how +
             'Your edits and ratings feed the Feedback loop and shape the next drafts.</p>' + (cards or '<div class=box>No drafts yet.</div>'))
 
 
@@ -386,6 +394,8 @@ def feedback(snap):
 
     def summary(x):
         d = x["data"]
+        if x["kind"] == "sent":
+            return "sent to your inbox"
         if x["kind"] == "rating":
             return "rated " + ("good" if d["value"] > 0 else "poor")
         if d["before"] == d["after"]:
@@ -780,6 +790,24 @@ def do_removeperson(body):
     return 200, {"note": "Removed."}
 
 
+def do_send(body):
+    if not mail_out.can_send():
+        return 503, {"error": "Sending is not set up. Add TO_ADDRESS and GMAIL_APP_PASSWORD in Vercel, or use the mail app button."}
+    subject = " ".join(str(body.get("subject", "")).split())[:200]
+    text = str(body.get("body", "")).strip()[:5000]
+    if not subject or len(text.split()) < 5:
+        return 400, {"error": "The subject and body cannot be empty."}
+    since = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat(timespec="seconds")
+    if sum(x["kind"] == "sent" and x["ts"] > since for x in db.events(500)) >= MAX_SENDS_PER_DAY:
+        return 429, {"error": f"Daily limit reached ({MAX_SENDS_PER_DAY} emails). Try again tomorrow."}
+    try:
+        mail_out.deliver(subject, text)
+    except Exception as ex:  # the error text can name the account, so only the type is shown
+        return 502, {"error": f"Gmail did not accept it ({type(ex).__name__}). Check the app password."}
+    db.add_event(str(body.get("domain", ""))[:100], "sent", {"subject": subject})
+    return 200, {"note": "Sent to your own inbox."}
+
+
 def do_adddomains(body):
     raw = body.get("domains")
     if not isinstance(raw, list):
@@ -795,7 +823,7 @@ def do_adddomains(body):
     return 200, {"note": f"Added {len(domains)} to the queue. Run them from the Run page."}
 
 
-ROUTES = {"addpeople": do_addpeople, "removeperson": do_removeperson, "prospects": do_prospects, "adddomains": do_adddomains, "auto": do_auto, "settings": do_settings, "run": do_run, "fb": do_fb, "learn": do_learn, "shortlist": do_shortlist}
+ROUTES = {"send": do_send, "addpeople": do_addpeople, "removeperson": do_removeperson, "prospects": do_prospects, "adddomains": do_adddomains, "auto": do_auto, "settings": do_settings, "run": do_run, "fb": do_fb, "learn": do_learn, "shortlist": do_shortlist}
 
 
 class handler(BaseHTTPRequestHandler):

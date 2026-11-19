@@ -41,15 +41,21 @@ def process(domain, contacts_path="data/contacts.csv", approved=False, seed=None
     row["contact"] = {**contact, "why": why}
 
     # best hook: a verified quote about audits or customer pressure; else the funding news (a recent round is a real reason to write)
-    hook = (facts.get("compliance_signals") or [None])[0] or facts.get("funding_source")
+    hook = drafts.pick_hook(facts)
     if not hook:
         return end("no_hook", "no verified compliance signal and no funding news to open with", human=True)
     pains = drafts.pain_points(domain, facts, contact)
     if len(pains) != 2:
         return end("no_hook", f"expected 2 pain points, got {len(pains)}", human=True)
     mail = drafts.draft(domain, facts, contact, pains, hook, lessons)
-    if contact["name"].split()[0] not in mail["body"]:
-        row["flags"].append("email does not address the contact by first name")
+    name = drafts.company(domain, facts)
+    sources = " ".join([hook, json.dumps(pains), json.dumps(facts)]).lower()
+    problems = drafts.check(mail, contact, name, sources)
+    if problems:  # one rewrite with the problems named; anything still wrong goes to a human
+        mail = drafts.draft(domain, facts, contact, pains, hook, lessons, fixes=problems)
+        problems = drafts.check(mail, contact, name, sources)
+    if problems:
+        row["flags"].append("Check before sending: " + "; ".join(problems))
         row["needs_human"] = True
     row.update(pain_points=pains, hook=hook, subject=mail["subject"], body=mail["body"],
                send=send.send(domain, mail["subject"], mail["body"], approved))
