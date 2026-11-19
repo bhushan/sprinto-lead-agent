@@ -6,7 +6,7 @@ load_dotenv()
 OFFLINE = os.getenv("OFFLINE", "1") == "1"
 API_KEY = os.getenv("GEMINI_API_KEY", "")
 HUNTER_API_KEY = os.getenv("HUNTER_API_KEY", "")  # Option A for step 4; empty = use data/contacts.csv (Option B)
-MODEL = "gemini-2.0-flash"
+MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 TEMPERATURE = 0.3
 
 QUALIFY_THRESHOLD = 70      # minimum ICP fit (0-100, same scale as the score) to email
