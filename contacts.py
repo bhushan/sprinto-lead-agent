@@ -10,6 +10,7 @@ import re
 import requests
 
 import config
+import db
 
 TIERS = [
     (re.compile(r"ciso|security|compliance|trust|grc", re.I), 100, "owns security and compliance"),
@@ -45,12 +46,21 @@ def _hunter(domain):
             for e in r.json()["data"]["emails"] if e.get("first_name") and (e.get("confidence") or 0) >= 50]
 
 
+def _known(domain):
+    """Contacts added on the Data page. Using them costs no Hunter search."""
+    try:
+        return db.people(domain) if db.enabled else []
+    except Exception:
+        return []
+
+
 def find_contact(domain, headcount=None, path="data/contacts.csv"):
     """Return (contact, why). contact is None when nobody on the list owns the problem."""
-    people = _hunter(domain) if (config.HUNTER_API_KEY and not config.OFFLINE) else _csv(domain, path)
+    known = _known(domain)
+    people = known or (_hunter(domain) if (config.HUNTER_API_KEY and not config.OFFLINE) else _csv(domain, path))
     ranked = sorted(((*_rank(p["title"], headcount), p) for p in people), key=lambda x: -x[0])
     if not ranked or ranked[0][0] == 0:
         return None, f"{len(people)} candidates, none owns security or engineering"
     score, why, best = ranked[0]
     others = ", ".join(f"{p['name']} ({p['title']})" for s, _, p in ranked[1:])
-    return best, f"{best['title']}: {why}" + (f". Passed over: {others}" if others else "")
+    return best, f"{best['title']}: {why}" + (" (from your own data)" if known else "") + (f". Passed over: {others}" if others else "")

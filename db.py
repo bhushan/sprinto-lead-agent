@@ -14,6 +14,7 @@ SCHEMA = [
     "create table if not exists learnings(ts text, rule text)",
     "create table if not exists runs(ts text, n integer, drafted integer)",
     "create table if not exists shortlist(domain text primary key, data text)",
+    "create table if not exists people(domain text, name text, title text, email text, primary key(domain, name))",
     "create table if not exists settings(key text primary key, data text, updated text)",
 ]
 _ready = False
@@ -114,3 +115,24 @@ def set_settings(s):
     else:
         _sql("insert into settings(key, data, updated) values(?, ?, ?) on conflict(key) do update set "
              "data = excluded.data, updated = excluded.updated", ("icp", json.dumps(s), _now()))
+
+
+def add_people(rows):
+    """rows: [(domain, name, title, email)]. Adding the same name at a domain again updates the title and email."""
+    for d, n, t, em in rows:
+        _sql("insert into people(domain, name, title, email) values(?, ?, ?, ?) on conflict(domain, name) do update set "
+             "title = excluded.title, email = excluded.email", (d, n, t, em))
+
+
+def people(domain):
+    return [{"name": n, "title": t, "email": em} for n, t, em in
+            _sql("select name, title, email from people where domain = ? order by name", (domain,))]
+
+
+def all_people():
+    return [{"domain": d, "name": n, "title": t, "has_email": bool(em)} for d, n, t, em in
+            _sql("select domain, name, title, email from people order by domain, name")]
+
+
+def remove_person(domain, name):
+    _sql("delete from people where domain = ? and name = ?", (domain, name))

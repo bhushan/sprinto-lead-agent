@@ -46,7 +46,7 @@ STATUS = {  # label, css class
 TODO = {  # what the human should do for each hand-over
     "manual_review": "Open the site and decide if it is a B2B SaaS company. If yes, add it to your list and re-run.",
     "failed": "The homepage could not be read. Check the site by hand, or try the domain again later.",
-    "no_contact": "Hunter found nobody who owns security or engineering. Look the right person up in Apollo and add them to data/contacts.csv.",
+    "no_contact": "Hunter found nobody who owns security or engineering. Look the right person up in Apollo and add them on the My contacts page.",
     "no_hook": "Nothing specific to open with. Write the first line yourself.",
 }
 STEPS = [("Shortlist", "Funded SaaS from Google News", 0), ("Scrape", "One cached, robots-aware fetch", 0),
@@ -151,6 +151,8 @@ const pf=()=>({keywords:document.querySelector('#p_kw').value,regions:['IN','US'
 chain('#psearch',()=>[['prospects',pf()],['shortlist',{}]],'Saving, then searching Google News and checking homepages. About a minute, keep this tab open.');
 chain('#psave',()=>[['prospects',pf()]],'Saving...');
 chain('#padd',()=>[['adddomains',{domains:document.querySelector('#p_dom').value.split(/[\\s,]+/).filter(Boolean)}]],'Adding...');
+chain('#pplAdd',()=>[['addpeople',{lines:document.querySelector('#pl_lines').value}]],'Adding...');
+document.querySelectorAll('.rmp').forEach(b=>b.onclick=()=>{b.disabled=true;post('removeperson',{domain:b.dataset.d,name:b.dataset.n}).then(()=>location.reload()).catch(x=>{alert(x.message);b.disabled=false})});
 go('#find','shortlist',()=>({}),'Searching Google News and checking homepages, about a minute...');
 go('#go','run',()=>({domains:document.querySelector('#doms').value.split(/[\\s,]+/).filter(Boolean)}),'Running, this takes up to 3 minutes. Keep this tab open.');
 go('#short','run',()=>({shortlist:true}),'Running the next companies from the shortlist, up to 3 minutes. Keep this tab open.');
@@ -231,7 +233,7 @@ def shell(tab, body, snap, q=""):
     return ('<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">'
             f'<title>Outreach Agent</title><style>{CSS}</style><script>const NEEDPW={"true" if APP_PASSWORD else "false"};</script><div class=app><aside>'
             '<div class=brand><i></i><div>OUTREACH<small>AGENT</small></div></div>'
-            f'<h4>PIPELINE</h4>{link("overview", "Overview")}{link("run", "Run pipeline")}{link("companies", "Companies")}{link("prospects", "Prospects")}{link("method", "Method")}{link("settings", "ICP settings")}'
+            f'<h4>PIPELINE</h4>{link("overview", "Overview")}{link("run", "Run pipeline")}{link("companies", "Companies")}{link("prospects", "Prospects")}{link("data", "My contacts")}{link("method", "Method")}{link("settings", "ICP settings")}'
             f'<h4>HUMAN GATES</h4>{link("review", "Review queue", human)}{link("drafts", "Drafts &amp; sends", drafts)}'
             f'<h4>LEARNING</h4>{link("feedback", "Feedback loop")}'
             '<div class=note>The model reads and writes. Python rules decide. Every draft waits for you.<br><br>Case study build, not affiliated with Sprinto.</div></aside>'
@@ -568,6 +570,28 @@ def prospects_page(snap):
             '<p><a class="btn p" href="/?p=run">Go to Run pipeline</a></p></div>')
 
 
+def data_page(snap):
+    editable = db.enabled and not snap.get("db_error")
+    dis = "" if editable else "disabled"
+    try:
+        people = db.all_people() if db.enabled else []
+    except Exception:
+        people = []
+    rows = "".join(
+        f'<tr><td><b>{e(p["name"])}</b></td><td>{e(p["title"])}</td><td>{e(p["domain"])}</td><td>{"saved" if p["has_email"] else "-"}</td>'
+        f'<td><button class="btn rmp" data-d="{e(p["domain"])}" data-n="{e(p["name"])}" {dis}>Remove</button></td></tr>' for p in people) \
+        or "<tr><td colspan=5><small>No contacts yet.</small></td></tr>"
+    note = "" if editable else '<div class=warnbox>A database is needed to save contacts. Showing a read-only view.</div>'
+    return ('<div class=kicker>Pipeline</div><h1>My contacts</h1>'
+            '<p class=sub>Add people you already know at a company. When the pipeline researches that company it writes to your contact, '
+            'if their title fits, and spends no Hunter search. Companies without your contacts still go through Hunter.</p>' + note +
+            f'<div class=box style="margin-top:0"><h3>Add contacts</h3><label>One per line: website, name, title, email (email is optional)</label>'
+            f'<textarea class=t id=pl_lines style="min-height:120px" placeholder="example.com, Priya Nair, CTO, priya@example.com" {dis}></textarea>'
+            f'<div class=row><button class="btn g" id=pplAdd {dis}>Add contacts</button><span class=ok-t id=status></span></div>'
+            '<small>Emails are stored for your records but never shown on this site.</small></div>'
+            f'<div class=box><h3>Your contacts ({len(people)})</h3><table><tr><th>Name</th><th>Title</th><th>Company</th><th>Email</th><th></th></tr>{rows}</table></div>')
+
+
 def page(url):
     q = {k: v[0] for k, v in parse_qs(urlparse(url).query).items()}
     tab, snap = q.get("p", "overview"), load()
@@ -582,6 +606,8 @@ def page(url):
         return shell("drafts", drafts(snap), snap)
     if tab == "feedback":
         return shell("feedback", feedback(snap), snap)
+    if tab == "data":
+        return shell("data", data_page(snap), snap)
     if tab == "prospects":
         return shell("prospects", prospects_page(snap), snap)
     if tab == "settings":
@@ -721,11 +747,44 @@ def do_prospects(body):
     return 200, {"note": "Saved. The next search and the Monday run use these."}
 
 
+def _site(d):
+    return str(d).strip().lower().removeprefix("https://").removeprefix("http://").removeprefix("www.").split("/")[0]
+
+
+EMAIL = re.compile(r"^[^@\s,]+@[^@\s,]+\.[^@\s,]+$")
+
+
+def do_addpeople(body):
+    lines = [x for x in str(body.get("lines") or "").splitlines() if x.strip()][:100]
+    rows = []
+    for n, line in enumerate(lines, 1):
+        parts = [p.strip() for p in line.split(",")]
+        if len(parts) < 3:
+            return 400, {"error": f"Line {n}: write website, name, title (and an optional email), separated by commas."}
+        domain, name, title, email = _site(parts[0]), parts[1][:80], parts[2][:80], ",".join(parts[3:]).strip()
+        if not DOMAIN.match(domain):
+            return 400, {"error": f"Line {n}: not a website address ({domain[:40]})."}
+        if not name or not title:
+            return 400, {"error": f"Line {n}: both a name and a title are needed."}
+        if email and not EMAIL.match(email):
+            return 400, {"error": f"Line {n}: that email looks wrong."}
+        rows.append((domain, name, title, email))
+    if not rows:
+        return 400, {"error": "Enter at least one contact."}
+    db.add_people(rows)
+    return 200, {"note": f"Saved {len(rows)} contact{'s' if len(rows) > 1 else ''}."}
+
+
+def do_removeperson(body):
+    db.remove_person(str(body.get("domain", ""))[:100], str(body.get("name", ""))[:100])
+    return 200, {"note": "Removed."}
+
+
 def do_adddomains(body):
     raw = body.get("domains")
     if not isinstance(raw, list):
         return 400, {"error": "Enter at least one website."}
-    cleaned = [str(d).strip().lower().removeprefix("https://").removeprefix("http://").removeprefix("www.").split("/")[0] for d in raw]
+    cleaned = [_site(d) for d in raw]
     domains = list(dict.fromkeys(d for d in cleaned if d))[:50]
     if not domains:
         return 400, {"error": "Enter at least one website."}
@@ -736,7 +795,7 @@ def do_adddomains(body):
     return 200, {"note": f"Added {len(domains)} to the queue. Run them from the Run page."}
 
 
-ROUTES = {"prospects": do_prospects, "adddomains": do_adddomains, "auto": do_auto, "settings": do_settings, "run": do_run, "fb": do_fb, "learn": do_learn, "shortlist": do_shortlist}
+ROUTES = {"addpeople": do_addpeople, "removeperson": do_removeperson, "prospects": do_prospects, "adddomains": do_adddomains, "auto": do_auto, "settings": do_settings, "run": do_run, "fb": do_fb, "learn": do_learn, "shortlist": do_shortlist}
 
 
 class handler(BaseHTTPRequestHandler):

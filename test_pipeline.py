@@ -31,6 +31,7 @@ assert db.learnings() == ["c"]
 assert run.process("finlytic.example")["facts"]["company_name"] == "Finlytic"
 import drafts
 assert drafts.company("hyphenate.ai", {}) == "Hyphenate"
+import contacts
 import settings  # ICP settings: bad input is rejected, a stricter threshold changes the outcome, defaults restore it
 try:
     settings.validate({**settings.DEFAULTS, "threshold": 150}); raise SystemExit("threshold 150 was accepted")
@@ -40,6 +41,11 @@ settings.apply(settings.validate({**settings.DEFAULTS, "threshold": 90}))
 assert run.process("finlytic.example")["status"] == "not_qualified"
 settings.apply(settings.DEFAULTS)
 assert run.process("finlytic.example")["status"] == "drafted"
+db.add_people([("finlytic.example", "Own Person", "CISO", "own@finlytic.example")])
+c, why = contacts.find_contact("finlytic.example", 120, "data/contacts.csv")
+assert c["name"] == "Own Person" and "your own data" in why
+db.remove_person("finlytic.example", "Own Person")
+assert contacts.find_contact("finlytic.example", 120, "data/contacts.csv")[0]["name"] == "Rhea Menon"
 import shortlist  # prospect search: keywords become queries; bad keywords and empty regions are rejected
 settings.apply(settings.validate({**settings.DEFAULTS, "keywords": "cybersecurity, healthtech"}))
 assert len(shortlist.queries()) == 2 and "cybersecurity" in shortlist.queries()[0]

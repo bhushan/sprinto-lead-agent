@@ -103,3 +103,9 @@ The Prospects page saves your own search keywords (up to 5, e.g. "cybersecurity,
 UK, Singapore). "Save and search now" turns each keyword into a Google News funding query for the ICP stages, resolves
 each company to a website, and adds it to the queue; you can also paste your own websites. The Run page then researches
 the queue, and the Monday run uses the same keywords. The built-in SaaS search is used when no keywords are set.
+
+## My contacts
+
+The My contacts page stores people you already know (website, name, title, optional email). When the pipeline
+researches a company with your contacts, it writes to the best-fitting one and spends no Hunter search; other
+companies still use Hunter. Emails are stored but never rendered on the site.
