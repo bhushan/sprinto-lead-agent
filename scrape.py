@@ -8,6 +8,8 @@ import requests
 import config
 
 PAGES = Path(__file__).parent / "fixtures" / "pages"
+_vendors = {}  # domain -> trust-center vendor seen on any page of that site
+VENDORS = re.compile(r"(vanta|drata|sprinto)\.com", re.I)
 _cache = {}  # one fetch per (domain, page) per process
 SKIP = {"script", "style", "noscript", "nav", "svg", "form"}
 BREAKS = {"br", "p", "div", "li", "h1", "h2", "h3", "tr", "section", "footer"}
@@ -23,10 +25,25 @@ def fetch(domain, path="home"):
     return _cache[key]
 
 
+def vendor(domain):
+    """Vanta, Drata or Sprinto if the site's trust center runs on one (checked in raw HTML, not visible text)."""
+    return _vendors.get(domain)
+
+
+def _spot(domain, raw):
+    m = VENDORS.search(raw)
+    if m:
+        _vendors[domain] = m.group(1).title()
+
+
 def _fetch(domain, path):
     if config.OFFLINE:
         f = PAGES / f"{domain}_{path}.txt"
-        return (f.read_text(encoding="utf-8"), "") if f.exists() else ("", "page not found")
+        if not f.exists():
+            return "", "page not found"
+        raw = f.read_text(encoding="utf-8")
+        _spot(domain, raw)
+        return raw, ""
     base = f"https://{domain}"
     url = base + ("/" if path == "home" else f"/{path}")
     if not _allowed(base, url):
@@ -40,6 +57,7 @@ def _fetch(domain, path):
         return "", f"blocked or login wall (http {r.status_code})"
     if r.status_code >= 400:
         return "", f"http {r.status_code}"
+    _spot(domain, r.text)
     text = clean(r.text)
     note = "thin page: may be JavaScript-rendered" if len(text.split()) < config.THIN_WORDS else ""
     return text, note

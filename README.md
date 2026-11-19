@@ -51,3 +51,14 @@ per-company evidence, contact, pain points, email draft), and Run (offline demo)
 `data/snapshot.json`, the last live run. Refresh it with `python run.py --domains domains.txt && python snapshot.py`
 and push; Vercel redeploys. The "Review and send" button opens your own mail app with the draft filled in,
 so nothing is sent from the site and no Gmail password is needed.
+
+## Stage 1 and guards
+
+- `python shortlist.py 20` finds recently funded SaaS companies on Google News (Series A-C in the
+  headline, last 2 years, excluded sectors dropped) and resolves each to a domain only when the
+  homepage title names the company and the page shares a topic word with the headline. The funding
+  stage and its headline are stored as evidence for the "right stage?" question, then
+  `python run.py --domains data/shortlist.txt` runs them.
+- A quote the model returns is kept only if it appears word for word on the page it read. Dropped
+  quotes are counted per company (`rejected_quotes`).
+- A trust center on Vanta, Drata or Sprinto (detected in the raw HTML) disqualifies a company.

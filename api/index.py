@@ -18,6 +18,7 @@ sys.path.insert(0, str(ROOT))
 os.chdir(tempfile.gettempdir())  # send.py writes outbox/ relative to cwd; only the temp dir is writable on Vercel
 
 import impact  # noqa: E402
+import qualify  # noqa: E402
 import run  # noqa: E402
 
 STATUS = {  # label, css class
@@ -25,7 +26,7 @@ STATUS = {  # label, css class
     "disqualified": ("Disqualified", "mute"), "manual_review": ("Needs a human", "warn"),
     "failed": ("Needs a human", "warn"), "no_contact": ("Needs a human", "warn"), "no_hook": ("Needs a human", "warn"),
 }
-STEPS = [("Scrape", "One cached, robots-aware fetch per page"), ("Extract", "Model fills named fields"),
+STEPS = [("Shortlist", "Funded SaaS from Google News, stage from the headline"), ("Scrape", "One cached, robots-aware fetch per page"), ("Extract", "Named fields; quotes must appear on the page"),
          ("Qualify", "Evidence Map loop, max 4 extra fetches"), ("Find contact", "Hunter.io, ranked by who owns security"),
          ("Pain points", "Two, each backed by a quote"), ("Draft", "By name, with a specific hook"),
          ("Send", "You approve, mail goes to you only")]
@@ -71,7 +72,7 @@ def load():
 
 def shell(tab, body):
     nav = "".join(f'<a href="/?p={k}" class="{"on" if tab == k else ""}">{v}</a>'
-                  for k, v in (("overview", "Overview"), ("companies", "Companies"), ("run", "Run")))
+                  for k, v in (("overview", "Overview"), ("companies", "Companies"), ("method", "Method"), ("run", "Run")))
     return (f'<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">'
             f'<title>Outreach Agent</title><style>{CSS}</style><header><div class=wrap><a class=brand href="/"><i></i>Outreach Agent</a>'
             f'<nav>{nav}</nav></div></header><main class=wrap>{body}</main>'
@@ -155,6 +156,40 @@ def company(snap, domain):
             f'{mail}</section>')
 
 
+NINE = [("Kill switches", "A no means do not build it", [
+            ("Problem real?", "Yes. 15-20 minutes per company, 8-15 a week, quality drops by Friday."),
+            ("Workflow repeated?", "Yes. The same research for every new prospect, every week."),
+            ("Input available?", "Yes. Company sites are public; contacts come from Hunter.io.")]),
+        ("Sizing", "A no means build something smaller", [
+            ("Output valuable?", "Yes. A qualified lead with a drafted email is directly actionable."),
+            ("Impact measurable?", "Yes. Seconds per company, rewrite rate, conversion."),
+            ("ROI worth it?", "Yes. Even a small lift in outbound conversion pays for it.")]),
+        ("Boundary", "A no means put a human exactly here", [
+            ("Failure risk OK?", "Partly. Mail goes to your own inbox only, and sending is a human step."),
+            ("Judgment protected?", "Yes. Every unsure case goes to a human instead of a guess."),
+            ("Owner clear?", "Yes. The Growth Lead reviews and sends.")])]
+DECISIONS = [("Outcome", "Cut prospect research from 15-20 minutes to under 2 minutes per company."),
+             ("Baseline", "8-15 companies a week, 15-20 minutes each, quality dropping toward the end of the list."),
+             ("Workflow change", "The Growth Lead moves from researcher and writer to reviewer and sender."),
+             ("Measurement", "Seconds per company under 120; fewer than 20% of emails rewritten; conversion holds."),
+             ("Kill criterion", "Stop if more than 50% of emails are rewritten, running it costs more time than it saves, or contact accuracy falls below 60%.")]
+
+
+def method():
+    ev = "".join(f"<tr><td><b>{e(q['ask'])}</b></td><td>{e(', '.join('/' + p for p in q['paths']))}</td><td>{q['limit']}</td>"
+                 f"<td>{e(q['if_unanswered'])}</td></tr>" for q in qualify.QUESTIONS)
+    nine = "".join(f"<div class=box><h3>{e(t)}</h3><small>{e(s)}</small>"
+                   + "".join(f"<div class=q><b>{e(a)}</b> {e(b)}</div>" for a, b in rows) + "</div>" for t, s, rows in NINE)
+    dec = "".join(f"<div class=q><b>{i}. {e(a)}</b> {e(b)}</div>" for i, (a, b) in enumerate(DECISIONS, 1))
+    return ('<section class=sec><div class=kicker>Method</div><h2>Why it is built this way.</h2>'
+            '<p class=lead style="text-align:left;margin:0">Code decides, the model reads. The model fills named fields; Python checks them, '
+            'picks the next page, stops at the limit, and hands over to a human when unsure.</p>'
+            f'<div class=box><h3>Evidence Map (the live rules)</h3><table><tr><th>Question</th><th>Look at</th><th>Fetch limit</th><th>If unanswered</th></tr>{ev}</table>'
+            '<small>Worst case: 4 page fetches beyond the homepage. A hallucinated quote that is not on the page is dropped and counted.</small></div>'
+            f'<h2 style="margin-top:36px">The nine checks.</h2><div class=grid2>{nine}</div>'
+            f'<h2 style="margin-top:36px">Five pre-build decisions.</h2><div class=box>{dec}</div></section>')
+
+
 def run_page(demo):
     out = ""
     if demo:
@@ -169,7 +204,8 @@ def run_page(demo):
             f'<p class=lead style="text-align:left;margin:0">The live run needs your keys, so it runs on your machine. This page can run the offline demo.</p>'
             f'<p><a class="btn p" href="/?p=run&demo=1">Run the demo</a></p>{out}'
             f'<div class=box><h3>Live run</h3><pre>cp .env.example .env     # add GEMINI_API_KEY, HUNTER_API_KEY, TO_ADDRESS\n'
-            f'python run.py --domains domains.txt\npython snapshot.py       # refresh this page with the results\ngit push</pre></div></section>')
+            f'python shortlist.py 20   # funded SaaS from Google News\n'
+            f'python run.py --domains data/shortlist.txt\npython snapshot.py       # refresh this page with the results\ngit push</pre></div></section>')
 
 
 def page(url):
@@ -179,6 +215,8 @@ def page(url):
         return shell("companies", companies(snap, q.get("f", "all")))
     if tab == "company":
         return shell("companies", company(snap, q.get("d", "")))
+    if tab == "method":
+        return shell("method", method())
     if tab == "run":
         return shell("run", run_page(q.get("demo")))
     return shell("overview", overview(snap))

@@ -5,4 +5,5 @@ orbitdocs.example
 brickbox.example
 vaultly.example
 mistline.example
+trustco.example
 ghostco.example

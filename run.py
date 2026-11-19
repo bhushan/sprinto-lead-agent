@@ -11,7 +11,7 @@ import scrape
 import send
 
 
-def process(domain, contacts_path="data/contacts.csv", approved=False):
+def process(domain, contacts_path="data/contacts.csv", approved=False, seed=None):
     """Run the 7 steps for one domain. Always returns a row that records why it ended where it did."""
     t0 = time.time()
     row = {"domain": domain, "needs_human": False, "flags": [], "fetches": 0}
@@ -25,7 +25,7 @@ def process(domain, contacts_path="data/contacts.csv", approved=False):
     if not home:  # degrade gracefully: log the reason, queue for a human, move on
         return end("failed", f"homepage not scraped: {note}", human=True)
 
-    q = qualify.qualify(domain, home)
+    q = qualify.qualify(domain, home, seed)
     row.update(score=q["score"], facts=q["facts"], evidence=q["evidence"], fetches=q["fetches"],
                flags=q["flags"], needs_human=q["needs_human"])
     if q["status"] != "qualified":
@@ -37,9 +37,10 @@ def process(domain, contacts_path="data/contacts.csv", approved=False):
         return end("no_contact", why, human=True)
     row["contact"] = {**contact, "why": why}
 
-    hook = (facts.get("compliance_signals") or [None])[0]
+    # best hook: a verified quote about audits or customer pressure; else the funding news (a recent round is a real reason to write)
+    hook = (facts.get("compliance_signals") or [None])[0] or facts.get("funding_source")
     if not hook:
-        return end("no_hook", "no specific compliance signal to open with", human=True)
+        return end("no_hook", "no verified compliance signal and no funding news to open with", human=True)
     pains = drafts.pain_points(domain, facts, contact)
     if len(pains) != 2:
         return end("no_hook", f"expected 2 pain points, got {len(pains)}", human=True)
@@ -54,8 +55,10 @@ def process(domain, contacts_path="data/contacts.csv", approved=False):
 
 def run(domains, contacts_path, approved=False):
     rows = []
+    sl = Path("data/shortlist.json")
+    seeds = json.loads(sl.read_text(encoding="utf-8")) if sl.exists() else {}
     for d in domains:
-        r = process(d, contacts_path, approved)
+        r = process(d, contacts_path, approved, seeds.get(d))
         rows.append(r)
         who = r.get("contact", {}).get("name", "-")
         print(f"{d:20} {r['status']:13} score={r.get('score')!s:5} {who:14} "

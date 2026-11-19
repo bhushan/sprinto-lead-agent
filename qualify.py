@@ -27,22 +27,26 @@ def _stage_known(f):
 # and "stop" (kill). Mirrors the Evidence Map in the L4 lecture; worst case 4 fetches.
 QUESTIONS = [
     dict(ask="Already certified?", paths=["security", "trust"], limit=1,
-         done=lambda f: bool(f.get("certifications")),
-         kill=lambda f: bool(f.get("certifications")), kill_reason="already holds a named certification",
+         done=lambda f: bool(f.get("certifications") or f.get("trust_vendor")),
+         kill=lambda f: bool(f.get("certifications") or f.get("trust_vendor")),
+         kill_reason=lambda f: f"trust center already runs on {f['trust_vendor']}" if f.get("trust_vendor")
+         else "already holds a named certification",
          if_unanswered="treat as not certified, flag"),
     dict(ask="B2B SaaS?", paths=["product", "about"], limit=1,
          done=lambda f: bool(f.get("buyer")),
-         kill=lambda f: f.get("is_saas") is False, kill_reason="not a B2B SaaS company",
+         kill=lambda f: f.get("is_saas") is False, kill_reason=lambda f: "not a B2B SaaS company",
          if_unanswered="manual_review"),
     dict(ask="Right stage?", paths=["careers", "pricing", "customers"], limit=2,
-         done=_stage_known, kill=lambda f: False, kill_reason="",
+         done=_stage_known, kill=lambda f: False, kill_reason=lambda f: "",
          if_unanswered="qualify at lower rank, flagged"),
 ]
 
 
 def _merge(facts, new):
     for k, v in new.items():
-        if isinstance(v, list):
+        if k == "rejected_quotes":
+            facts[k] = facts.get(k, 0) + (v or 0)
+        elif isinstance(v, list):
             facts[k] = facts.get(k, []) + [x for x in v if x not in facts.get(k, [])]
         elif v not in (None, ""):
             facts[k] = v
@@ -52,9 +56,11 @@ def _dead(facts):
     return next((q for q in QUESTIONS if q["kill"](facts)), None)
 
 
-def qualify(domain, home_text):
-    facts, trail, fetches, flags = {}, [], 0, []
+def qualify(domain, home_text, seed=None):
+    facts, trail, fetches, flags = dict(seed or {}), [], 0, []  # seed: funding stage from the news headline
     _merge(facts, extract.extract(domain, "home", home_text))
+    if scrape.vendor(domain):
+        facts["trust_vendor"] = scrape.vendor(domain)
 
     def result(status, reason, score):
         return dict(status=status, reason=reason, score=score, facts=facts, evidence=trail,
@@ -69,13 +75,15 @@ def qualify(domain, home_text):
             text, note = scrape.fetch(domain, page)
             if text:
                 _merge(facts, extract.extract(domain, page, text))
+            if scrape.vendor(domain):
+                facts["trust_vendor"] = scrape.vendor(domain)
             notes.append(f"/{page}: {'read' if text else note}")
         answered = q["done"](facts)
         trail.append(dict(question=q["ask"], answered=answered, fetched=notes,
                           if_unanswered=None if answered else q["if_unanswered"]))
         dead = _dead(facts)
         if dead:
-            return result("disqualified", dead["kill_reason"], 0)
+            return result("disqualified", dead["kill_reason"](facts), 0)
         if not answered and q["if_unanswered"] == "manual_review":
             return result("manual_review", f"{q['ask']} not answered within {q['limit']} fetch", None)
         if not answered:
