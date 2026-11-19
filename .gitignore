@@ -3,3 +3,6 @@ __pycache__/
 outbox/
 runs/
 .venv/
+.env.local
+.neon
+node_modules/
