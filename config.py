@@ -1,10 +1,30 @@
 import os
+from contextlib import contextmanager
+from contextvars import ContextVar
+
 from dotenv import load_dotenv
 
 load_dotenv()
 
-OFFLINE = os.getenv("OFFLINE", "1") == "1"
-API_KEY = os.getenv("GEMINI_API_KEY", "")
+OFFLINE = os.getenv("OFFLINE", "1") == "1"  # process default; read it through offline()
+_forced = ContextVar("offline", default=None)
+
+
+def offline():
+    """True when this request runs on fixtures. A request can force it (the demo) without changing other requests."""
+    v = _forced.get()
+    return OFFLINE if v is None else v
+
+
+@contextmanager
+def forced_offline(flag=True):
+    token = _forced.set(flag)
+    try:
+        yield
+    finally:
+        _forced.reset(token)
+
+API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("OPENROUTER_API_KEY", "")  # an sk-or- key goes through OpenRouter
 HUNTER_API_KEY = os.getenv("HUNTER_API_KEY", "")  # Option A for step 4; empty = use data/contacts.csv (Option B)
 MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 TEMPERATURE = 0.3

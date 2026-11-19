@@ -7,7 +7,9 @@ python shortlist.py [N]  ->  data/shortlist.txt (up to N domains) and data/short
 import json
 import re
 import sys
+import time
 import xml.etree.ElementTree as ET
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from itertools import zip_longest
@@ -55,16 +57,30 @@ def hiring_queries():
     return [f'{kw} startup hires OR appoints CISO OR "head of security" OR "head of compliance"' for kw in KEYWORDS]
 
 
+def parse_date(v):
+    """An RSS pubDate as an aware datetime, or None when it is missing or malformed."""
+    try:
+        d = parsedate_to_datetime(v)
+    except (TypeError, ValueError, IndexError):
+        return None
+    return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+
+
+def _feed(url):
+    try:
+        root = ET.fromstring(requests.get(url, timeout=(5, 12), headers={"User-Agent": config.USER_AGENT}).content)
+    except (requests.RequestException, ET.ParseError):
+        return []
+    return [(it.findtext("title", ""), it.findtext("link", ""), parse_date(it.findtext("pubDate"))) for it in root.iter("item")]
+
+
 def headlines(qs, window="2y"):
-    for q in qs:
-        for hl, gl, ceid in [REGION_TABLE[c] for c in REGION_CODES]:
-            url = f"https://news.google.com/rss/search?q={quote(q)}+when:{window}&hl={hl}&gl={gl}&ceid={ceid}"
-            try:
-                root = ET.fromstring(requests.get(url, timeout=15, headers={"User-Agent": config.USER_AGENT}).content)
-            except (requests.RequestException, ET.ParseError):
-                continue
-            for it in root.iter("item"):
-                yield it.findtext("title", ""), it.findtext("link", ""), parsedate_to_datetime(it.findtext("pubDate"))
+    """Every (title, link, date) for the queries in every chosen region. Feeds are read in parallel; a feed that fails is skipped."""
+    urls = [f"https://news.google.com/rss/search?q={quote(q)}+when:{window}&hl={hl}&gl={gl}&ceid={ceid}"
+            for q in qs for hl, gl, ceid in [REGION_TABLE[c] for c in REGION_CODES]]
+    with ThreadPoolExecutor(8) as pool:
+        for items in pool.map(_feed, urls):
+            yield from (h for h in items if h[2] is not None)
 
 
 GENERIC = {"raises", "series", "funding", "startup", "round", "million", "billion", "valuation", "led", "secures",
@@ -77,13 +93,17 @@ def resolve(name, headline):
     headline, so same-name companies (a different "Neon") and parked pages are rejected."""
     slug = re.sub(r"[^a-z0-9]", "", name.lower())
     topic = {w for w in re.findall(r"[a-z]{5,}", headline.lower()) if w not in GENERIC and w not in name.lower()}
+    if not slug:
+        return None
     for tld in TLDS:
         try:
-            r = requests.get(f"https://{slug}{tld}", timeout=6, headers={"User-Agent": config.USER_AGENT})
-        except requests.RequestException:
+            r = requests.get(f"https://{slug}{tld}", timeout=(4, 6), headers={"User-Agent": config.USER_AGENT}, stream=True)
+            page = r.raw.read(300_000, decode_content=True).decode(r.encoding or "utf-8", errors="replace") if r.ok else ""
+            r.close()
+        except (requests.RequestException, OSError):
             continue
-        title = re.search(r"<title[^>]*>(.*?)</title>", r.text, re.I | re.S)
-        if r.ok and title and name.lower() in title.group(1).lower() and any(w in r.text.lower() for w in topic):
+        title = re.search(r"<title[^>]*>(.*?)</title>", page, re.I | re.S)
+        if title and name.lower() in title.group(1).lower() and any(w in page.lower() for w in topic):
             return f"{slug}{tld}"
     return None
 
@@ -108,21 +128,32 @@ def _hiring(now):
     return found
 
 
-def find(n):
-    """Return {domain: {name, funding, hiring}} for up to n companies. funding/hiring hold the headline that surfaced it (or None)."""
+def find(n, budget=150):
+    """Return {domain: {name, funding, hiring}} for up to n companies. funding/hiring hold the headline that surfaced it (or None).
+
+    budget: seconds. Names are resolved in parallel and whatever is resolved when time runs out is returned,
+    so a slow news day or slow websites can never run past the hosting time limit."""
+    deadline = time.time() + budget
     now = datetime.now(timezone.utc)
     funding = _funding(now) if "funding" in SOURCES else {}
     hiring = _hiring(now) if "hiring" in SOURCES else {}
-    names = list(dict.fromkeys(x for pair in zip_longest(funding, hiring) for x in pair if x))  # alternate the two sources
-    out = {}
-    for name in names[:n * 3]:  # bounded: each name costs up to 5 homepage requests
-        info = {"name": name, "funding": funding.get(name), "hiring": hiring.get(name)}
-        domain = resolve(name, (info["funding"] or info["hiring"])["headline"])
-        if domain and domain not in out:
-            out[domain] = info
-        if len(out) >= n:
-            break
-    return out
+    names = list(dict.fromkeys(x for pair in zip_longest(funding, hiring) for x in pair if x))[:n * 3]  # alternate the sources
+    infos = {name: {"name": name, "funding": funding.get(name), "hiring": hiring.get(name)} for name in names}
+    found = {}
+    pool = ThreadPoolExecutor(6)
+    jobs = {pool.submit(resolve, name, (i["funding"] or i["hiring"])["headline"]): name for name, i in infos.items()}
+    try:
+        for fut in as_completed(jobs, timeout=max(1, deadline - time.time())):
+            domain = fut.result()
+            if domain and domain not in found.values():
+                found[jobs[fut]] = domain
+            if len(found) >= n:
+                break
+    except TimeoutError:
+        pass
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
+    return {found[name]: infos[name] for name in names if name in found}  # keep the news order
 
 
 def seeds(found):

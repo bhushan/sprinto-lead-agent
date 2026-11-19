@@ -23,7 +23,7 @@ def deliver(subject, body):
 
 def send(domain, subject, body, approved=False):
     """Step 7. Writes to outbox/ unless running live AND approved (run.py --send)."""
-    if config.OFFLINE or not approved:
+    if config.offline() or not approved:
         Path("outbox").mkdir(exist_ok=True)
         Path(f"outbox/{domain}.txt").write_text(
             f"To: {config.TO_ADDRESS}\nSubject: {subject}\n\n{body}\n", encoding="utf-8")

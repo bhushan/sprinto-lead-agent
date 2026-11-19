@@ -1,22 +1,127 @@
+"""The one place the model is called. Every reply is a JSON object; anything else is a ModelError.
+
+ModelError: this reply was unusable (bad JSON, wrong shape). The company is handed to a human.
+ModelUnavailable: the model could not be reached after retries (rate limit, outage, bad key). Not the company's
+fault, so a job pauses and keeps the company queued instead of failing it.
+"""
 import json
+import re
+import time
 from pathlib import Path
 
 import config
 
 _CANNED = Path(__file__).parent / "fixtures" / "llm_responses.json"
+TIMEOUT_MS = 60_000
+RETRY_WAITS = (2, 5)  # seconds between attempts on a rate limit or server error
+_client = None
+
+
+class ModelError(Exception):
+    pass
+
+
+class ModelUnavailable(Exception):
+    pass
+
+
+def _get_client():
+    global _client
+    if _client is None:
+        from google import genai
+        from google.genai import types
+        _client = genai.Client(api_key=config.API_KEY, http_options=types.HttpOptions(timeout=TIMEOUT_MS))
+    return _client
+
+
+OPENROUTER = "https://openrouter.ai/api/v1/chat/completions"
+
+
+def _openrouter_model():
+    m = config.MODEL
+    return m if "/" in m else f"google/{m}"
+
+
+def _call_openrouter(prompt):
+    """The same prompt to the same Gemini model through OpenRouter (used when the key is an OpenRouter key)."""
+    import requests
+    last = None
+    for wait in (0, *RETRY_WAITS):
+        time.sleep(wait)
+        try:
+            r = requests.post(OPENROUTER, timeout=TIMEOUT_MS / 1000, headers={"Authorization": f"Bearer {config.API_KEY}"},
+                              json={"model": _openrouter_model(), "temperature": config.TEMPERATURE,
+                                    "response_format": {"type": "json_object"},
+                                    "messages": [{"role": "user", "content": prompt}]})
+        except requests.RequestException as ex:
+            last = ex
+            continue
+        if r.status_code == 200:
+            try:
+                return r.json()["choices"][0]["message"]["content"]
+            except (ValueError, KeyError, IndexError, TypeError):
+                raise ModelError("the model reply had no content") from None
+        if r.status_code in (401, 403):
+            raise ModelUnavailable(f"the model refused the request (http {r.status_code}); check the API key")
+        if r.status_code == 402:
+            raise ModelUnavailable("the model account is out of credits")
+        if r.status_code in (400, 404):
+            raise ModelUnavailable(f"the model request was rejected (http {r.status_code}); check GEMINI_MODEL")
+        last = r
+    code = getattr(last, "status_code", None)
+    raise ModelUnavailable("the model is rate limited, try again in a minute" if code == 429
+                           else f"the model did not answer ({code or type(last).__name__})")
+
+
+def _call(prompt):
+    if config.API_KEY.startswith("sk-or-"):
+        return _call_openrouter(prompt)
+    from google.genai import errors
+    last = None
+    for wait in (0, *RETRY_WAITS):
+        time.sleep(wait)
+        try:
+            resp = _get_client().models.generate_content(
+                model=config.MODEL, contents=prompt,
+                config={"temperature": config.TEMPERATURE, "response_mime_type": "application/json"})
+            return resp.text
+        except errors.APIError as ex:
+            last = ex
+            if ex.code in (400, 401, 403, 404):  # a bad key or model name will not fix itself
+                raise ModelUnavailable(f"the model refused the request (http {ex.code}); check GEMINI_API_KEY and GEMINI_MODEL") from ex
+            if ex.code not in (408, 429, 500, 502, 503, 504):
+                raise ModelError(f"model error (http {ex.code})") from ex
+        except Exception as ex:  # timeouts and connection errors from the HTTP client
+            last = ex
+    code = getattr(last, "code", None)
+    raise ModelUnavailable("the model is rate limited, try again in a minute" if code == 429
+                           else f"the model did not answer ({type(last).__name__})")
 
 
 def ask(step, domain, prompt, key=None):
     """Return the model's JSON reply as a dict. key picks the sub-reply (e.g. which page was read)."""
-    if config.OFFLINE:
-        reply = json.loads(_CANNED.read_text(encoding="utf-8"))[step][domain]
-        return reply[key] if key else reply
+    if config.offline():
+        try:
+            reply = json.loads(_CANNED.read_text(encoding="utf-8"))[step][domain]
+            reply = reply[key] if key else reply
+        except KeyError:
+            raise ModelError(f"no canned {step} reply for {domain}") from None
+    else:
+        text = re.sub(r"^\s*```(?:json)?\s*|\s*```\s*$", "", _call(prompt) or "")  # some replies come fenced
+        try:
+            reply = json.loads(text)
+        except ValueError:
+            raise ModelError(f"the {step} reply was not JSON") from None
+    if isinstance(reply, list) and len(reply) == 1 and isinstance(reply[0], dict):
+        reply = reply[0]  # the model sometimes wraps the object in a list
+    if not isinstance(reply, dict):
+        raise ModelError(f"the {step} reply was not a JSON object")
+    return reply
 
-    from google import genai
-    client = genai.Client(api_key=config.API_KEY)
-    resp = client.models.generate_content(
-        model=config.MODEL,
-        contents=prompt,
-        config={"temperature": config.TEMPERATURE, "response_mime_type": "application/json"},
-    )
-    return json.loads(resp.text)
+
+def number(v, lo, hi):
+    """An int clamped to [lo, hi], or None. Accepts "88" and 88.0."""
+    try:
+        return max(lo, min(hi, int(float(v))))
+    except (TypeError, ValueError):
+        return None

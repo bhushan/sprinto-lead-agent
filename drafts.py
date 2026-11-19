@@ -1,4 +1,5 @@
 """Steps 5 and 6: two likely pain points for this person, then a personalised email."""
+import json
 import re
 
 import config
@@ -77,7 +78,10 @@ def check(mail, contact, name, sources):
 def pain_points(domain, facts, contact):
     p = PAIN_PROMPT.format(name=contact["name"], title=contact["title"], company=company(domain, facts),
                            product=facts.get("product"), facts=facts)
-    return llm.ask("pain_points", domain, p)["pain_points"]
+    raw = llm.ask("pain_points", domain, p).get("pain_points")
+    keep = [{"pain": str(x["pain"]).strip(), "evidence": str(x.get("evidence") or "").strip()} for x in raw or []
+            if isinstance(x, dict) and isinstance(x.get("pain"), str) and x["pain"].strip()] if isinstance(raw, list) else []
+    return keep[:2] if len(keep) >= 2 else keep
 
 
 def draft(domain, facts, contact, pains, hook, lessons=None, fixes=None):
@@ -86,9 +90,45 @@ def draft(domain, facts, contact, pains, hook, lessons=None, fixes=None):
                             fixes=("Your previous draft broke these rules. Fix every one:\n- " + "\n- ".join(fixes) + "\n") if fixes else "",
                             lessons=("Follow these preferences the reviewer showed in past edits:\n- " + "\n- ".join(lessons) + "\n") if lessons else "")
     mail = llm.ask("draft", domain, p)
+    if not (isinstance(mail.get("subject"), str) and isinstance(mail.get("body"), str) and mail["body"].strip()):
+        raise llm.ModelError("the draft reply had no subject or body")
+    mail = {"subject": " ".join(mail["subject"].split()) or "A short question", "body": mail["body"].strip()}
     if not mail["body"].rstrip().endswith(config.SENDER_NAME):  # the model sometimes drops the sign-off
         mail["body"] = mail["body"].rstrip() + f"\n\n{config.SENDER_NAME}"
     return mail
+
+
+FOLLOWUP_PROMPT = """Write a short follow-up email from {sender} at Sprinto to {name}, {title} at {company}, sent 14 days after
+this first email, which got no reply:
+SUBJECT: {subject}
+{body}
+Address them by first name. Add one new, useful angle from these facts instead of repeating the first email: {facts}
+Under 60 words, one soft question, no guilt ("just following up", "bumping this"), no hype, no invented numbers.
+Never say or imply the company lacks a certification or has compliance gaps. Return JSON: subject, body."""
+
+FOLLOWUP_STOCK = ("just following up", "bumping this", "circling back", "following up on my last", "did you get a chance")
+
+
+def followup(domain, facts, contact, first):
+    """The day-14 follow-up for a first email that got no reply. Returns {subject, body, problems}."""
+    p = FOLLOWUP_PROMPT.format(sender=config.SENDER_NAME, name=contact["name"], title=contact["title"],
+                               company=company(domain, facts), subject=first["subject"], body=first["body"],
+                               facts={k: facts.get(k) for k in ("product", "buyer", "compliance_signals", "funding_stage", "open_roles")})
+    mail = llm.ask("followup", domain, p)
+    if not (isinstance(mail.get("subject"), str) and isinstance(mail.get("body"), str) and mail["body"].strip()):
+        raise llm.ModelError("the follow-up reply had no subject or body")
+    body = mail["body"].strip()
+    if not body.rstrip().endswith(config.SENDER_NAME):
+        body = body.rstrip() + f"\n\n{config.SENDER_NAME}"
+    sources = json.dumps(facts).lower() + first["body"].lower()
+    problems = [x for x in check({"subject": mail["subject"], "body": body}, contact, company(domain, facts), sources)
+                if not x.startswith("it is too short")]
+    if len(body.split()) > 80:
+        problems.append("keep the follow-up under 60 words")
+    low = body.lower()
+    problems += [f"remove the stock phrase: {x}" for x in FOLLOWUP_STOCK if x in low]
+    subject = " ".join(mail["subject"].split()) or "Re: " + first["subject"]
+    return {"subject": subject, "body": body, "problems": problems}
 
 
 LEARN_PROMPT = """A reviewer edited cold-email drafts before sending. Each item shows the draft and the edited version
@@ -109,4 +149,5 @@ def learn(events):
             items.append("RATING: " + ("good draft" if d["value"] > 0 else "poor draft") + f" (hook: {d.get('hook', '')})")
     if not items:
         return []
-    return llm.ask("learn", "all", LEARN_PROMPT.format(items="\n\n".join(items[:20])))["rules"][:5]
+    rules = llm.ask("learn", "all", LEARN_PROMPT.format(items="\n\n".join(items[:20]))).get("rules")
+    return [" ".join(r.split())[:300] for r in rules if isinstance(r, str) and r.strip()][:5] if isinstance(rules, list) else []

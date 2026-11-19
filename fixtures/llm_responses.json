@@ -228,5 +228,19 @@
    "subject": "GDPR and SOC 2 evidence for Zenstack's buyers",
    "body": "Hi Kavita,\n\nZenstack's buyers are asking for GDPR and SOC 2 evidence while audit prep is still manual and slow. That is usually where enterprise deals slip.\n\nWorth 20 minutes to see how automation shortens that cycle?\n\nPiyush"
   }
+ },
+ "followup": {
+  "zenstack.example": {
+   "subject": "Re: SOC 2 at Zenstack",
+   "body": "Hi Kavita,\n\nOne more thought for Zenstack: teams selling to enterprise buyers often lose weeks to security questionnaires before the audit even starts. Mapping one set of controls across SOC 2 and ISO 27001 cuts that work. Worth a short call next week?"
+  },
+  "finlytic.example": {
+   "subject": "Re: SOC 2 Type II evidence at Finlytic",
+   "body": "Hi Rhea,\n\nOne more idea for Finlytic: the evidence your security team gathers by hand for each customer review can be collected through integrations, once, for every audit. Open to a short call next week?"
+  },
+  "cartwheel.example": {
+   "subject": "Re: Audit prep at Cartwheel",
+   "body": "Hi Arjun,\n\nA different angle for Cartwheel: enterprise deals often stall on security questionnaires while the audit is still months away. A single control set answers most of them. Would a short call next week help?"
+  }
  }
 }
