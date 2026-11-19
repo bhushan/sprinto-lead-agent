@@ -554,7 +554,7 @@ def run_page(snap, demo):
         left = ""
     else:
         try:
-            hist = "".join(f"<tr><td><small>{e(x['ts'][:16].replace('T', ' '))}</small></td><td>{x['n']} companies</td><td>{x['drafted']} drafted</td></tr>" for x in db.runs()) \
+            hist = "".join(f"<tr><td><small>{e(x['ts'][:16].replace('T', ' '))}</small></td><td>{x['n']} compan{'y' if x['n'] == 1 else 'ies'}</td><td>{x['drafted']} drafted</td></tr>" for x in db.runs()) \
                 or "<tr><td colspan=3><small>No runs yet.</small></td></tr>"
             live = job_panel()
         except Exception as ex:
