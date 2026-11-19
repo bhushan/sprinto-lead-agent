@@ -28,10 +28,12 @@ import requests  # noqa: E402
 
 import config  # noqa: E402
 import contacts  # noqa: E402
+import crm  # noqa: E402
 import db  # noqa: E402
 import drafts as drafts_mod  # noqa: E402
 import impact  # noqa: E402
 import jobs  # noqa: E402
+import llm  # noqa: E402
 import qualify  # noqa: E402
 import run  # noqa: E402
 import send as mail_out  # noqa: E402
@@ -43,19 +45,20 @@ DOMAIN = re.compile(r"^(?=.{4,100}$)([a-z0-9-]+\.)+[a-z]{2,}$")  # rejects IPs a
 MAX_PER_RUN = jobs.MAX_PER_RUN
 MAX_SENDS_PER_DAY = 10  # sending is locked to your own address; this stops a loop from filling your inbox
 MAX_RUNS_PER_HOUR = 3  # the site is open to reviewers, so this protects Gemini and Hunter credits
-CRON_BUDGET = 270  # seconds of the 300 s limit the weekly run may use; the rest is paused for a resume
+CRON_BUDGET = 240  # seconds of the 300 s limit the weekly run may use; the rest is paused for a resume
 
 STATUS = {  # label, css class
     "drafted": ("Email drafted", "ok"), "not_qualified": ("Not qualified", "mute"),
     "disqualified": ("Disqualified", "mute"), "manual_review": ("Needs a human", "warn"),
     "failed": ("Needs a human", "warn"), "no_contact": ("Needs a human", "warn"), "no_hook": ("Needs a human", "warn"),
-    "error": ("Needs a human", "warn"),
+    "error": ("Needs a human", "warn"), "awaiting_confirm": ("Confirm fit", "warn"),
 }
 TODO = {  # what the human should do for each hand-over
     "manual_review": "Open the site and decide if it is a B2B SaaS company. If yes, add it to your list and re-run.",
     "failed": "The homepage could not be read. Check the site by hand, or try the domain again later.",
     "no_contact": "Hunter found nobody who owns security or engineering. Look the right person up in Apollo and add them on the My contacts page.",
     "no_hook": "Nothing specific to open with. Write the first line yourself.",
+    "awaiting_confirm": "Check the fit and the contact below. Confirm to draft the email, or drop the company.",
     "error": "Something went wrong while researching it (the reason is above). Re-run it; if it fails again, check the site by hand.",
 }
 STEPS = [("Shortlist", "Funded SaaS from Google News", 0), ("Scrape", "One cached, robots-aware fetch", 0),
@@ -144,7 +147,7 @@ document.querySelectorAll('.draft').forEach(d=>{
   if(G('sent:'+id)){msg.textContent='Approved earlier'}
   const save=()=>S('draft:'+id,JSON.stringify({s:sub.value,b:body.value}));sub.oninput=body.oninput=()=>{save();msg.textContent='Edit saved in this browser'};
   d.querySelector('.send').onclick=()=>{save();const edit={domain:id,kind:'edit',data:{before:{subject:sub.defaultValue,body:body.defaultValue},after:{subject:sub.value,body:body.value}}};
-    if(!CANSEND){S('sent:'+id,'1');msg.textContent='Approved and opened in your mail app';post('fb',edit).catch(()=>{});
+    if(!CANSEND){S('sent:'+id,'1');msg.textContent='Approved and opened in your mail app';post('fb',edit).catch(()=>{});post('approved',{domain:id,subject:sub.value}).catch(()=>{});
       location.href='mailto:?subject='+encodeURIComponent(sub.value)+'&body='+encodeURIComponent(body.value);return}
     const b=d.querySelector('.send');b.disabled=true;msg.textContent='Sending...';
     post('send',{domain:id,subject:sub.value,body:body.value}).then(j=>{S('sent:'+id,'1');msg.textContent=j.note;post('fb',edit).catch(()=>{})})
@@ -163,6 +166,18 @@ document.querySelectorAll('.act').forEach(b=>{b.onclick=()=>{const c=b.closest('
   const n=c.querySelector('.cn'),t=c.querySelector('.ct');if(n)data.contact={name:n.value,title:t.value};startRun(b,m,'run',data)}});
 const cont=document.querySelector('#cont');if(cont)cont.onclick=()=>{const m=document.querySelector('#status');cont.disabled=true;
   post('resume',{id:cont.dataset.id}).then(j=>drive(j.job,m)).catch(x=>{m.textContent=x.message;cont.disabled=false})};
+document.querySelectorAll('.cfm').forEach(b=>{b.onclick=()=>{const m=b.closest('.box').querySelector('.amsg');b.disabled=true;
+  m.textContent='Writing the email, up to a minute...';post('confirm',{domain:b.dataset.d}).then(j=>{m.textContent=j.note;setTimeout(()=>location.reload(),900)})
+  .catch(x=>{m.textContent=x.message;b.disabled=false})}});
+document.querySelectorAll('.dsm').forEach(b=>{b.onclick=()=>{b.disabled=true;post('dismiss',{domain:b.dataset.d}).then(()=>location.reload())
+  .catch(x=>{b.closest('.box').querySelector('.amsg').textContent=x.message;b.disabled=false})}});
+document.querySelectorAll('.fu').forEach(d=>{const id=d.dataset.d,sub=d.querySelector('.sub-in'),body=d.querySelector('.body-in'),msg=d.querySelector('.msg'),b=d.querySelector('.fsend');
+  b.onclick=()=>{if(!CANSEND){post('approved',{domain:id,kind:'followup',subject:sub.value}).then(()=>{msg.textContent='Opened in your mail app and logged'}).catch(x=>msg.textContent=x.message);
+      location.href='mailto:?subject='+encodeURIComponent(sub.value)+'&body='+encodeURIComponent(body.value);return}
+    b.disabled=true;msg.textContent='Sending...';post('send',{domain:id,kind:'followup',subject:sub.value,body:body.value})
+      .then(j=>{msg.textContent=j.note;setTimeout(()=>location.reload(),900)}).catch(x=>{msg.textContent=x.message;b.disabled=false})}});
+document.querySelectorAll('.rep').forEach(b=>{b.onclick=()=>{b.disabled=true;post('replied',{domain:b.dataset.d}).then(()=>location.reload()).catch(x=>{alert(x.message);b.disabled=false})}});
+go('#fudraft','followups',()=>({}),'Drafting the due follow-ups...');
 const stopb=document.querySelector('#stop');if(stopb)stopb.onclick=()=>{stopb.disabled=true;post('stop',{id:stopb.dataset.id}).then(()=>location.reload()).catch(x=>{document.querySelector('#status').textContent=x.message;stopb.disabled=false})};
 document.addEventListener('keydown',ev=>{if((ev.ctrlKey||ev.metaKey)&&ev.key==='k'){ev.preventDefault();const q=document.querySelector('#gq');if(q)q.focus()}});
 const th=document.querySelector('#theme');if(th)th.onclick=()=>{const d=document.documentElement.dataset.theme==='dark'?'':'dark';document.documentElement.dataset.theme=d;S('theme',d)};
@@ -183,7 +198,7 @@ runBtn('#short','run',()=>({shortlist:true}));
 const form=()=>{const v=id=>document.querySelector('#'+id).value,csv=id=>v(id);
   return {threshold:v('s_threshold'),stage_penalty:v('s_penalty'),stages:['A','B','C'].filter(x=>document.querySelector('#s_stage_'+x).checked),
    exclude:csv('s_exclude'),limits:{certified:v('s_l_certified'),saas:v('s_l_saas'),stage:v('s_l_stage')},
-   roles:{security:csv('s_r_security'),engineering:csv('s_r_engineering'),founder:csv('s_r_founder')},sender:v('s_sender'),target:v('s_target'),tier_a:v('s_tier_a')}};
+   roles:{security:csv('s_r_security'),engineering:csv('s_r_engineering'),founder:csv('s_r_founder')},sender:v('s_sender'),target:v('s_target'),tier_a:v('s_tier_a'),confirm:document.querySelector('#s_confirm').checked}};
 go('#savecfg','settings',()=>({settings:form()}),'Saving...');
 go('#resetcfg','settings',()=>({reset:true}),'Resetting to defaults...');
 go('#learn','learn',()=>({}),'Learning from your edits and ratings...');
@@ -220,7 +235,7 @@ def load():
                 db.save_company(r)
             rows = db.companies()
         return {"rows": rows, "generated": db.last_update(), "hunter_left": hunter_left(snap["hunter_left"]), "db": True,
-                "runs": db.runs(20), "unseen": sum(d not in {r["domain"] for r in rows} for d in db.shortlist())}
+                "runs": db.runs(20), "due": sum(x["due"] for x in crm.rows()), "unseen": sum(d not in {r["domain"] for r in rows} for d in db.shortlist())}
     except Exception as ex:  # a broken database must not take the read-only pages down
         return {**snap, "db_error": str(ex)[:160]}
 
@@ -268,7 +283,7 @@ def shell(tab, body, snap, q=""):
             f'<title>Outreach Agent</title><style>{CSS}</style><script>const CANSEND={"true" if mail_out.can_send() else "false"};</script><div class=app><aside>'
             '<div class=brand><i></i><div>OUTREACH<small>AGENT</small></div></div>'
             f'<h4>PIPELINE</h4>{link("overview", "Overview")}{link("run", "Run pipeline")}{link("companies", "Companies")}{link("prospects", "Prospects")}{link("data", "My contacts")}{link("method", "Method")}{link("settings", "ICP settings")}'
-            f'<h4>HUMAN GATES</h4>{link("review", "Review queue", human)}{link("drafts", "Drafts &amp; sends", drafts)}'
+            f'<h4>HUMAN GATES</h4>{link("review", "Review queue", human)}{link("drafts", "Drafts &amp; sends", drafts)}{link("crm", "CRM log", snap.get("due") or None)}'
             f'<h4>LEARNING</h4>{link("feedback", "Feedback loop")}'
             '<div class=note>The model reads and writes. Python rules decide. Every draft waits for you.<br><br>Case study build, not affiliated with Sprinto.</div></aside>'
             '<div><div class=top><form action="/"><input type=hidden name=p value=companies><input id=gq name=q placeholder="Search companies   Ctrl K" value="'
@@ -281,7 +296,7 @@ def overview(snap, run_id="all"):
     all_rows, runs = snap["rows"], snap.get("runs") or []
     rows = [r for r in all_rows if run_id == "all" or r.get("run", "earlier") == run_id]
     n = len(rows)
-    fit = count(rows, "drafted", "no_contact", "no_hook")
+    fit = count(rows, *jobs.QUALIFIED)
     human = sum(r["needs_human"] for r in rows)
     hl, target = snap["hunter_left"], current_settings()["target"]
     opts = '<option value="all">All companies</option>' + "".join(
@@ -319,8 +334,8 @@ def overview(snap, run_id="all"):
 
 def companies(snap, flt, q):
     rows = snap["rows"]
-    groups = {"all": None, "qualified": ("drafted", "no_contact", "no_hook"), "drafted": ("drafted",),
-              "flagged": ("manual_review", "failed", "no_contact", "no_hook"), "dropped": ("disqualified", "not_qualified")}
+    groups = {"all": None, "qualified": jobs.QUALIFIED, "drafted": ("drafted",),
+              "flagged": ("manual_review", "failed", "no_contact", "no_hook", "error", "awaiting_confirm"), "dropped": ("disqualified", "not_qualified")}
     chips = "".join(f'<a class="{"on" if flt == k else ""}" href="/?p=companies&f={k}&q={quote(q)}">{k.title()}'
                     f' ({len(rows) if v is None else count(rows, *v)})</a>' for k, v in groups.items())
     tiers = {t: sum(tier_of(r) == t for r in rows) for t in "ABC"}
@@ -361,7 +376,9 @@ def company(snap, domain):
                  f'<div class=box><h3>Email draft</h3><p><b>Hook:</b> {e(r["hook"])}<br><b>Subject:</b> {e(r["subject"])}</p><pre>{e(r["body"])}</pre>'
                  '<p><a class="btn g" href="/?p=drafts">Edit and send in Drafts &amp; sends</a></p></div>')
     elif r.get("needs_human"):
-        extra = f'<div class=box><h3>What a human should do</h3>{e(TODO.get(r["status"], ""))}</div>'
+        c = r.get("contact")
+        who = f'<div class=q><b>{e(c["name"])}</b>, {e(c["title"])}<br>{e(c.get("why", ""))}</div>' if c else ""
+        extra = f'<div class=box><h3>What a human should do</h3>{e(TODO.get(r["status"], ""))}{who}</div>'
     return (f'<a class=back href="/?p=companies">Back to companies</a><h1>{e(r["domain"])}</h1>'
             f'<span class="pill {cls}">{lab}</span> {tier_badge(r) if tier_of(r) else ""} <small>fit {"-" if r.get("score") is None else r["score"]}</small>'
             f'<p class=sub style="margin-top:10px">{e(r["reason"])}</p>'
@@ -375,6 +392,11 @@ def review(snap):
 
     def action(r):
         d = e(r["domain"])
+        if r["status"] == "awaiting_confirm":
+            c = r.get("contact") or {}
+            return (f'<div class=q><b>Contact:</b> {e(c.get("name", ""))}, {e(c.get("title", ""))}<br>{e(c.get("why", ""))}</div>'
+                    f'<div class=row style="margin-top:8px"><button class="btn g cfm" data-d="{d}" {off}>Confirm and draft</button>'
+                    f'<button class="btn dsm" data-d="{d}" {"" if db.enabled else "disabled"}>Drop it</button><span class="ok-t amsg"></span></div>')
         if r["status"] == "no_contact":
             return (f'<div class=row style="margin-top:8px"><input class="t cn" style="max-width:200px;margin:0" placeholder="Contact name">'
                     f'<input class="t ct" style="max-width:220px;margin:0" placeholder="Title, e.g. CTO">'
@@ -569,7 +591,8 @@ def settings_page(snap):  # noqa: C901
             f'<label>Points taken off when the funding stage is unknown</label>{num("s_penalty", s["stage_penalty"], 0, 30)}'
             f'<label>Score for tier A (at or above it is tier A; the score above is tier B; 15 below it is tier C, a near miss that is not emailed)</label>{num("s_tier_a", s["tier_a"], 0, 100)}'
             f'<label>Funding stages in the ICP</label><div style="margin:6px 0 4px">{stages}</div>'
-            f'<label>How many qualified companies a run aims for (1 to 5)</label>{num("s_target", s["target"], 1, 5)}</div>'
+            f'<label>How many qualified companies a run aims for (1 to 5)</label>{num("s_target", s["target"], 1, 5)}'
+            f'<label><input type=checkbox id=s_confirm {"checked" if s["confirm"] else ""} {dis}> Confirm fit and contact in the Review queue before an email is drafted</label></div>'
             f'<div class=box style="margin-top:0"><h3>How hard it looks (page fetches per question)</h3>'
             f'<label>Already certified? (trust and security pages, max 2)</label>{num("s_l_certified", lim["certified"], 0, 2)}'
             f'<label>B2B SaaS? (product and about pages, max 2)</label>{num("s_l_saas", lim["saas"], 0, 2)}'
@@ -664,6 +687,8 @@ def page(url):
         return shell("prospects", prospects_page(snap), snap)
     if tab == "settings":
         return shell("settings", settings_page(snap), snap)
+    if tab == "crm":
+        return shell("crm", crm_page(snap), snap)
     if tab == "method":
         return shell("method", method(), snap)
     if tab == "run":
@@ -759,7 +784,11 @@ def cron():
     if not job:
         job = jobs.start_auto(s["target"], _seeds())
     job = jobs.drain(job["id"], CRON_BUDGET)
-    return 200, {"job": {k: job.get(k) for k in ("id", "status", "note", "done", "qualified", "drafted")}}
+    try:
+        followups = crm.draft_due(limit=3)[0]  # the run used most of the time limit
+    except llm.ModelUnavailable as ex:  # the model went down: the follow-ups wait for the next run or the button
+        followups = f"not drafted: {ex}"
+    return 200, {"followups": followups, "job": {k: job.get(k) for k in ("id", "status", "note", "done", "qualified", "drafted")}}
 
 
 def do_fb(body):
@@ -863,7 +892,8 @@ def do_send(body):
         mail_out.deliver(subject, text)
     except Exception as ex:  # the error text can name the account, so only the type is shown
         return 502, {"error": f"Gmail did not accept it ({type(ex).__name__}). Check the app password."}
-    db.add_event(str(body.get("domain", ""))[:100], "sent", {"subject": subject})
+    db.add_event(str(body.get("domain", ""))[:100], "followup_sent" if body.get("kind") == "followup" else "sent",
+                 {"subject": subject, "channel": "inbox"})
     return 200, {"note": "Sent to your own inbox."}
 
 
@@ -882,10 +912,87 @@ def do_adddomains(body):
     return 200, {"note": f"Added {len(domains)} to the queue. Run them from the Run page."}
 
 
+def crm_page(snap):
+    if not db.enabled or snap.get("db_error"):
+        return ('<div class=kicker>Human gate</div><h1>CRM log</h1><div class=warnbox>A database is needed to log sends and follow-ups. '
+                'Add Neon from the Vercel Marketplace (Storage tab) and redeploy.</div>')
+    rows = crm.rows()
+    due = [r for r in rows if r["due"]]
+    table = "".join(
+        f'<tr><td><a href="/?p=company&d={quote(r["domain"])}"><b>{e(r["domain"])}</b></a><br><small>{e(r["contact"])}{", " + e(r["title"]) if r["title"] else ""}</small></td>'
+        f'<td><small>{e(r["first"][:10])} · {e(r["channel"])}</small><br>{e(r["subject"][:70])}</td>'
+        f'<td><span class="pill {"warn" if r["due"] else "ok" if r["replied"] else "mute"}">{e(r["status"])}</span><br><small>follow-up on {e(r["due_on"])}</small></td>'
+        f'<td>{"" if r["replied"] else f"<button class=\"btn rep\" data-d=\"{e(r["domain"])}\">Mark replied</button>"}</td></tr>' for r in rows) \
+        or '<tr><td colspan=4><small>Nothing sent yet. Approved emails show up here.</small></td></tr>'
+    cards = "".join(
+        f'<div class="box fu" data-d="{e(r["domain"])}"><div class=row><b>Follow-up to {e(r["contact"] or r["domain"])}</b><small>{e(r["domain"])}, first email {r["days"]} days ago</small></div>'
+        + (f'<div class=warnbox style="margin:8px 0">{e(r["followup"]["flag"])}</div>' if r["followup"].get("flag") else "")
+        + f'<input class="t sub-in" value="{e(r["followup"]["subject"])}"><textarea class="t body-in">{e(r["followup"]["body"])}</textarea>'
+        '<div class=row><button class="btn g fsend">Approve &amp; send follow-up</button><span class="ok-t msg"></span></div></div>'
+        for r in due if r["followup"])
+    waiting = sum(1 for r in due if not r["followup"])
+    miss = live_missing()
+    btn = (f'<p><button class="btn g" id=fudraft {"disabled" if miss or not waiting else ""}>Draft {waiting} due follow-up{"s" if waiting != 1 else ""}</button> '
+           f'<span class=ok-t id=status></span></p>')
+    return ('<div class=kicker>Human gate</div><h1>CRM log</h1><p class=sub>Every approved email, how it went out, and its follow-up. '
+            f'A first email with no reply after {crm.FOLLOWUP_DAYS} days gets a short follow-up drafted with a new angle; it waits here for your approval. '
+            'Mark a company replied to stop its follow-up. The Monday run drafts due follow-ups too.</p>'
+            f'{btn}{cards}<div class=box><h3>Log ({len(rows)})</h3><table><tr><th>Company</th><th>First email</th><th>Status</th><th></th></tr>{table}</table></div>')
+
+
+def _company(domain):
+    domain = str(domain or "")[:100]
+    c = next((x for x in db.companies() if x["domain"] == domain), None)
+    if not c:
+        raise LookupError("That company is not in the list. Reload the page.")
+    return c
+
+
+def do_confirm(body):
+    """A person confirmed fit and contact: draft the email from the stored research."""
+    current_settings()
+    c = _company(body.get("domain"))
+    if c["status"] != "awaiting_confirm":
+        return 409, {"error": "That company is not waiting for confirmation."}
+    row = run.public(run.draft_for(c, db.learnings()))
+    row["confirmed"] = db.now()
+    db.save_company(row)
+    return 200, {"note": "Email drafted. It is in Drafts and sends." if row["status"] == "drafted" else row["reason"]}
+
+
+def do_dismiss(body):
+    c = _company(body.get("domain"))
+    if c["status"] != "awaiting_confirm":
+        return 409, {"error": "That company is not waiting for confirmation."}
+    db.save_company({**c, "status": "not_qualified", "needs_human": False, "reason": "Dropped by the reviewer: fit or contact not right."})
+    return 200, {"note": "Dropped."}
+
+
+def do_approved(body):
+    """An email approved and opened in the reviewer's own mail app (no send from the site): logged for the CRM."""
+    c = _company(body.get("domain"))
+    kind = "followup_sent" if body.get("kind") == "followup" else "approved"
+    db.add_event(c["domain"], kind, {"subject": " ".join(str(body.get("subject", "")).split())[:200], "channel": "mail app"})
+    return 200, {"note": "Logged."}
+
+
+def do_replied(body):
+    c = _company(body.get("domain"))
+    db.add_event(c["domain"], "replied", {})
+    return 200, {"note": "Marked replied. No follow-up will be drafted."}
+
+
+def do_followups(body):
+    current_settings()
+    drafted, skipped = crm.draft_due()
+    return 200, {"note": f"{drafted} follow-ups drafted" + (f", {skipped} skipped (no first email stored)." if skipped else ".")}
+
+
 ROUTES = {"send": do_send, "addpeople": do_addpeople, "removeperson": do_removeperson, "prospects": do_prospects,
           "adddomains": do_adddomains, "auto": do_auto, "settings": do_settings, "run": do_run, "fb": do_fb,
-          "learn": do_learn, "shortlist": do_shortlist, "step": do_step, "resume": do_resume, "stop": do_stop}
-NEEDS_MODEL = (do_run, do_auto, do_learn, do_step, do_resume)
+          "learn": do_learn, "shortlist": do_shortlist, "step": do_step, "resume": do_resume, "stop": do_stop,
+          "confirm": do_confirm, "dismiss": do_dismiss, "approved": do_approved, "replied": do_replied, "followups": do_followups}
+NEEDS_MODEL = (do_run, do_auto, do_learn, do_step, do_resume, do_confirm, do_followups)
 
 
 def _log(where):
@@ -911,6 +1018,8 @@ def post(path, raw):
         return route(body)
     except jobs.Busy as ex:
         return 409, {"error": str(ex)}
+    except llm.ModelUnavailable as ex:
+        return 503, {"error": f"Not now: {ex}."}
     except LookupError as ex:
         return 404, {"error": str(ex)}
     except Exception as ex:  # noqa: BLE001

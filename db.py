@@ -91,8 +91,8 @@ def last_update():
     return r[0][0] if r else None
 
 
-def add_event(domain, kind, data):
-    _sql("insert into events(ts, domain, kind, data) values(?, ?, ?, ?)", (_now(), domain, kind, json.dumps(data, ensure_ascii=False)))
+def add_event(domain, kind, data, ts=None):
+    _sql("insert into events(ts, domain, kind, data) values(?, ?, ?, ?)", (ts or _now(), domain, kind, json.dumps(data, ensure_ascii=False)))
 
 
 def events(limit=50):
@@ -100,12 +100,20 @@ def events(limit=50):
             for t, d, k, x in _sql("select ts, domain, kind, data from events order by ts desc limit " + str(int(limit)))]
 
 
+def events_of(kinds):
+    """Every event of these kinds, oldest first (the CRM log)."""
+    marks = ", ".join("?" for _ in kinds)
+    return [{"ts": t, "domain": d, "kind": k, "data": json.loads(x)}
+            for t, d, k, x in _sql(f"select ts, domain, kind, data from events where kind in ({marks}) order by ts", tuple(kinds))]
+
+
 def learnings():
     return [r for (r,) in _sql("select rule from learnings order by ts")]
 
 
 def sent_since(iso):
-    r = _sql("select count(*) from events where kind = ? and ts > ?", ("sent", iso))
+    """Emails actually sent from the site (first emails and follow-ups) since iso."""
+    r = _sql("select count(*) from events where kind in ('sent', 'followup_sent') and ts > ?", (iso,))
     return r[0][0] if r else 0
 
 

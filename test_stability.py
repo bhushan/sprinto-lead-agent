@@ -175,4 +175,46 @@ for tab in ("overview", "companies", "review", "drafts", "feedback", "data", "pr
     assert html.startswith("<!doctype html>") and "Traceback" not in html, tab
 assert "broken.example" in app.page("/?p=review")
 assert "Not found" in app.page("/?p=company&d=nope.example")
+# 11. Confirm fit and contact before drafting (component map: Review queue gate). Off by default.
+assert settings.DEFAULTS["confirm"] is False and settings.validate({**settings.DEFAULTS, "confirm": True})["confirm"] is True
+settings.apply(settings.validate({**settings.DEFAULTS, "confirm": True}))
+r = run.process("finlytic.example")
+assert r["status"] == "awaiting_confirm" and r["needs_human"] and r["contact"]["name"] == "Rhea Menon" and "body" not in r, r
+d = run.draft_for(run.public(r))  # drafting later from the stored row, no new research
+assert d["status"] == "drafted" and d["body"] and not d["needs_human"] and d["fetches"] == r["fetches"], d
+settings.apply(settings.DEFAULTS)
+db.save_company(run.public(run.process("zenstack.example")))
+settings.apply(settings.validate({**settings.DEFAULTS, "confirm": True}))
+db.save_company(run.public(run.process("cartwheel.example")))
+settings.apply(settings.DEFAULTS)
+assert "Confirm and draft" in app.page("/?p=review")
+code, out = app.post("/?p=confirm", b'{"domain": "cartwheel.example"}')
+assert code == 200 and next(x for x in db.companies() if x["domain"] == "cartwheel.example")["status"] == "drafted", out
+assert app.post("/?p=confirm", b'{"domain": "cartwheel.example"}')[0] == 409  # already drafted
+db.save_company({**r, "domain": "dropme.example", "contact": {"name": "A B", "title": "CTO", "why": "x"}})
+code, out = app.post("/?p=dismiss", b'{"domain": "dropme.example"}')
+dropped = next(x for x in db.companies() if x["domain"] == "dropme.example")
+assert code == 200 and dropped["status"] == "not_qualified" and not dropped["needs_human"]
+
+# 12. Day-14 follow-up and the CRM log
+import crm  # noqa: E402
+from datetime import datetime as _dt, timedelta as _td, timezone as _tz  # noqa: E402
+old = (_dt.now(_tz.utc) - _td(days=15)).isoformat(timespec="seconds")
+db.add_event("zenstack.example", "sent", {"subject": "SOC 2 at Zenstack"}, ts=old)
+db.add_event("cartwheel.example", "approved", {"subject": "Audit prep at Cartwheel"})  # opened in the mail app today
+log = {x["domain"]: x for x in crm.rows()}
+assert log["zenstack.example"]["due"] and not log["cartwheel.example"]["due"], log
+assert log["cartwheel.example"]["channel"] == "mail app" and log["zenstack.example"]["channel"] == "inbox"
+f = crm.draft_followup("zenstack.example")
+assert f["body"] and len(f["body"].split()) <= 80 and "Zenstack" in f["body"]
+assert crm.rows_by_domain()["zenstack.example"]["followup"]["body"] == f["body"]
+db.add_event("zenstack.example", "replied", {})
+assert not crm.rows_by_domain()["zenstack.example"]["due"]  # a reply stops the follow-up
+assert app.post("/?p=replied", b'{"domain": "cartwheel.example"}')[0] == 200
+assert crm.rows_by_domain()["cartwheel.example"]["status"] == "replied"
+html = app.page("/?p=crm")
+assert "CRM log" in html and "zenstack.example" in html
+db.add_event("orbitdocs.example", "sent", {"subject": "x"}, ts=old)
+code, out = app.post("/?p=followups", b"{}")  # drafts every due follow-up; orbitdocs has no stored draft, so it is skipped
+assert code == 200 and out["note"].startswith("0 follow-ups drafted"), out
 print("ok")

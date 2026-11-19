@@ -1,4 +1,5 @@
 """Steps 5 and 6: two likely pain points for this person, then a personalised email."""
+import json
 import re
 
 import config
@@ -95,6 +96,39 @@ def draft(domain, facts, contact, pains, hook, lessons=None, fixes=None):
     if not mail["body"].rstrip().endswith(config.SENDER_NAME):  # the model sometimes drops the sign-off
         mail["body"] = mail["body"].rstrip() + f"\n\n{config.SENDER_NAME}"
     return mail
+
+
+FOLLOWUP_PROMPT = """Write a short follow-up email from {sender} at Sprinto to {name}, {title} at {company}, sent 14 days after
+this first email, which got no reply:
+SUBJECT: {subject}
+{body}
+Address them by first name. Add one new, useful angle from these facts instead of repeating the first email: {facts}
+Under 60 words, one soft question, no guilt ("just following up", "bumping this"), no hype, no invented numbers.
+Never say or imply the company lacks a certification or has compliance gaps. Return JSON: subject, body."""
+
+FOLLOWUP_STOCK = ("just following up", "bumping this", "circling back", "following up on my last", "did you get a chance")
+
+
+def followup(domain, facts, contact, first):
+    """The day-14 follow-up for a first email that got no reply. Returns {subject, body, problems}."""
+    p = FOLLOWUP_PROMPT.format(sender=config.SENDER_NAME, name=contact["name"], title=contact["title"],
+                               company=company(domain, facts), subject=first["subject"], body=first["body"],
+                               facts={k: facts.get(k) for k in ("product", "buyer", "compliance_signals", "funding_stage", "open_roles")})
+    mail = llm.ask("followup", domain, p)
+    if not (isinstance(mail.get("subject"), str) and isinstance(mail.get("body"), str) and mail["body"].strip()):
+        raise llm.ModelError("the follow-up reply had no subject or body")
+    body = mail["body"].strip()
+    if not body.rstrip().endswith(config.SENDER_NAME):
+        body = body.rstrip() + f"\n\n{config.SENDER_NAME}"
+    sources = json.dumps(facts).lower() + first["body"].lower()
+    problems = [x for x in check({"subject": mail["subject"], "body": body}, contact, company(domain, facts), sources)
+                if not x.startswith("it is too short")]
+    if len(body.split()) > 80:
+        problems.append("keep the follow-up under 60 words")
+    low = body.lower()
+    problems += [f"remove the stock phrase: {x}" for x in FOLLOWUP_STOCK if x in low]
+    subject = " ".join(mail["subject"].split()) or "Re: " + first["subject"]
+    return {"subject": subject, "body": body, "problems": problems}
 
 
 LEARN_PROMPT = """A reviewer edited cold-email drafts before sending. Each item shows the draft and the edited version

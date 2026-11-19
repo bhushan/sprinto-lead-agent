@@ -8,6 +8,7 @@ import re
 import config
 import contacts
 import qualify
+import run
 import shortlist
 
 QKEYS = ("certified", "saas", "stage")  # Evidence Map questions, in order
@@ -33,6 +34,7 @@ DEFAULTS = {
     "regions": ["IN", "US"],
     "tier_a": 85,
     "sources": ["funding", "hiring"],
+    "confirm": False,  # stop after the contact is found and wait for a person to confirm fit and contact
 }
 
 
@@ -87,6 +89,7 @@ def validate(raw):
     if not regions:
         raise ValueError("Pick at least one region.")
     s["regions"] = regions
+    s["confirm"] = raw.get("confirm", DEFAULTS["confirm"]) in (True, "true", "on", 1, "1")
     return s
 
 
@@ -103,7 +106,7 @@ def apply(s):
     """Push settings into the pipeline modules. ponytail: module globals, so concurrent requests share the last applied settings."""
     s = effective(s)
     config.QUALIFY_THRESHOLD, config.STAGE_UNKNOWN_PENALTY, config.SENDER_NAME = s["threshold"], s["stage_penalty"], s["sender"]
-    config.TIER_A, shortlist.SOURCES = s["tier_a"], s["sources"]
+    config.TIER_A, shortlist.SOURCES, run.CONFIRM = s["tier_a"], s["sources"], bool(s["confirm"])
     for q, k in zip(qualify.QUESTIONS, QKEYS):
         q["limit"] = min(s["limits"][k], len(q["paths"]))
     qualify.STAGES_TEXT = ", ".join("Series " + x for x in s["stages"])

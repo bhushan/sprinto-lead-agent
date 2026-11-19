@@ -16,6 +16,7 @@ Built for MESA Case 2 (Sprinto). Case study build, not affiliated with Sprinto.
 | [Run pipeline](https://sprinto-lead-agent-omega.vercel.app/?p=run) | Find companies for me, run specific domains, or [the offline demo](https://sprinto-lead-agent-omega.vercel.app/?p=run&demo=1) on fictional companies |
 | [Review queue](https://sprinto-lead-agent-omega.vercel.app/?p=review) | What the rules could not settle, with the action for each |
 | [Drafts and sends](https://sprinto-lead-agent-omega.vercel.app/?p=drafts) | Edit, rate Good or Poor, approve and send |
+| [CRM log](https://sprinto-lead-agent-omega.vercel.app/?p=crm) | Every approved email, how it went out, the day-14 follow-up and replies |
 | [Method](https://sprinto-lead-agent-omega.vercel.app/?p=method) | The Evidence Map, the nine checks and the five pre-build decisions |
 
 ## Component map
@@ -28,10 +29,8 @@ Built for MESA Case 2 (Sprinto). Case study build, not affiliated with Sprinto.
 | LLM (Gemini) | Extracts facts and quotes (code verifies each quote is on the page); writes two pain points and an email under 90 words (code checks it, one rewrite) |
 | Database (Neon Postgres) | ICP settings, my contacts, rules learned from edits, companies with verdict and evidence trail, runs |
 | Hunter.io | Domain search for a named contact, skipped when you added one yourself |
-| Review queue (human) | Flagged companies: add a contact, re-run |
-| Send (Gmail) | Approved drafts go to your own inbox only, 10 a day; mail-app fallback |
-
-Not built yet: confirming fit and contact before drafting, the day-14 follow-up and a CRM log.
+| Review queue (human) | Flagged companies: add a contact, re-run. Optionally confirm fit and contact before any email is drafted |
+| Send (Gmail) | Approved drafts go to your own inbox only, 10 a day; mail-app fallback. Day-14 follow-up and CRM log |
 
 ## How each step works
 
@@ -61,6 +60,13 @@ Not built yet: confirming fit and contact before drafting, the day-14 follow-up 
    stock phrases, no invented numbers, no claim that the company lacks a certification.
 7. **Review and send** (`send.py`): a human edits and approves. Edits and ratings feed "Learn from feedback", which
    turns them into at most 5 style rules added to every new draft.
+8. **Confirm before drafting** (ICP settings, off by default): the run stops once the contact is found, and the
+   Review queue shows the fit reason and the chosen person with **Confirm and draft** or **Drop it**. Drafting then
+   uses the stored research, with no new page fetches.
+9. **Follow-up and CRM log** (`crm.py`): every approved email is logged with its channel (inbox or mail app). A first
+   email with no reply after 14 days is due a follow-up under 60 words with a new angle, checked in code (no "just
+   following up"), and waits for approval like every other email. **Mark replied** stops it. The Monday run drafts
+   due follow-ups too.
 
 ## Running on Vercel
 

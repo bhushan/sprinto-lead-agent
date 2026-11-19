@@ -19,7 +19,7 @@ MAX_PER_RUN = 5          # companies looked at per run: bounds model and Hunter 
 STEP_LEASE = 330         # seconds; longer than the 300 s function limit, so a crashed step frees the job by itself
 STALE_MINUTES = 15       # a running job nobody stepped for this long is shown as paused
 COMPANY_SECONDS = 100    # drain() starts another company only with at least this much budget left
-QUALIFIED = ("drafted", "no_contact", "no_hook")
+QUALIFIED = ("drafted", "no_contact", "no_hook", "awaiting_confirm")
 
 
 class Busy(Exception):

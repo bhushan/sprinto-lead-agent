@@ -13,6 +13,9 @@ import scrape
 import send
 
 
+CONFIRM = False  # set from settings: wait for a person to confirm fit and contact before drafting
+
+
 def process(domain, contacts_path=contacts.CSV, approved=False, seed=None, lessons=None, contact=None):
     """Run the 7 steps for one domain. Always returns a row that records why it ended where it did.
 
@@ -56,7 +59,35 @@ def _steps(domain, row, end, at, contacts_path, approved, seed, lessons, contact
     if not contact:
         return end("no_contact", why, human=True)
     row["contact"] = {**contact, "why": why}
+    if CONFIRM:
+        return end("awaiting_confirm", q["reason"], human=True)
+    return _write(domain, row, end, at, approved, lessons, q["reason"])
 
+
+def draft_for(stored, lessons=None, approved=False):
+    """Draft the email for a company a person confirmed: uses the stored facts and contact, no new research."""
+    t0 = time.time()
+    row = {**stored, "flags": [f for f in stored.get("flags", []) if not f.startswith("Check before sending")],
+           "needs_human": False}
+    at = ["draft"]
+
+    def end(status, reason, human=False, **kw):
+        row.update(status=status, reason=reason, seconds=round(time.time() - t0, 2), **kw)
+        row["needs_human"] = row["needs_human"] or human
+        return row
+
+    try:
+        return _write(stored["domain"], row, end, at, approved, lessons, stored.get("reason", ""))
+    except llm.ModelUnavailable:
+        raise
+    except Exception as ex:  # noqa: BLE001
+        detail = str(ex) if isinstance(ex, llm.ModelError) else type(ex).__name__
+        return end("error", f"Stopped at draft: {detail}"[:300], human=True)
+
+
+def _write(domain, row, end, at, approved, lessons, reason):
+    """Hook, two pain points, the email and its code check (one rewrite)."""
+    facts, contact = row["facts"], row["contact"]
     # best hook: a verified quote about audits or customer pressure; else the funding news (a recent round is a real reason to write)
     at[0] = "draft"
     hook = drafts.pick_hook(facts)
@@ -77,7 +108,7 @@ def _steps(domain, row, end, at, contacts_path, approved, seed, lessons, contact
         row["needs_human"] = True
     row.update(pain_points=pains, hook=hook, subject=mail["subject"], body=mail["body"],
                send=send.send(domain, mail["subject"], mail["body"], approved))
-    return end("drafted", q["reason"])
+    return end("drafted", reason)
 
 
 def public(row):
@@ -85,7 +116,7 @@ def public(row):
     c = row.get("contact")
     if c:
         c.pop("email", None)
-        c["why"] = re.sub(r"\. Passed over: (.*)$", lambda m: f". Passed over {m.group(1).count('),') + 1} others.", c["why"])
+        c["why"] = re.sub(r"\. Passed over: (.*)$", lambda m: (lambda n: f". Passed over {n} other{'s' if n != 1 else ''}.")(m.group(1).count('),') + 1), c["why"])
     return row
 
 
