@@ -145,6 +145,12 @@ document.addEventListener('keydown',ev=>{if((ev.ctrlKey||ev.metaKey)&&ev.key==='
 const th=document.querySelector('#theme');if(th)th.onclick=()=>{const d=document.documentElement.dataset.theme==='dark'?'':'dark';document.documentElement.dataset.theme=d;S('theme',d)};
 let target=3;document.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.seg button').forEach(x=>x.classList.remove('on'));b.classList.add('on');target=+b.dataset.n});
 go('#auto','auto',()=>({target}),'Finding companies, researching them and stopping when enough qualify. This takes up to 4 minutes, keep this tab open.');
+const chain=(sel,steps,wait)=>{const b=document.querySelector(sel);if(!b)return;b.onclick=async()=>{const m=document.querySelector('#status');b.disabled=true;m.textContent=wait;
+  try{let j;for(const [p,d] of steps()){j=await post(p,d)}m.textContent=j.note||'Done';setTimeout(()=>location.reload(),700)}catch(x){m.textContent=x.message;b.disabled=false}}};
+const pf=()=>({keywords:document.querySelector('#p_kw').value,regions:['IN','US','GB','SG'].filter(c=>document.querySelector('#p_r_'+c).checked)});
+chain('#psearch',()=>[['prospects',pf()],['shortlist',{}]],'Saving, then searching Google News and checking homepages. About a minute, keep this tab open.');
+chain('#psave',()=>[['prospects',pf()]],'Saving...');
+chain('#padd',()=>[['adddomains',{domains:document.querySelector('#p_dom').value.split(/[\\s,]+/).filter(Boolean)}]],'Adding...');
 go('#find','shortlist',()=>({}),'Searching Google News and checking homepages, about a minute...');
 go('#go','run',()=>({domains:document.querySelector('#doms').value.split(/[\\s,]+/).filter(Boolean)}),'Running, this takes up to 3 minutes. Keep this tab open.');
 go('#short','run',()=>({shortlist:true}),'Running the next companies from the shortlist, up to 3 minutes. Keep this tab open.');
@@ -225,7 +231,7 @@ def shell(tab, body, snap, q=""):
     return ('<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">'
             f'<title>Outreach Agent</title><style>{CSS}</style><script>const NEEDPW={"true" if APP_PASSWORD else "false"};</script><div class=app><aside>'
             '<div class=brand><i></i><div>OUTREACH<small>AGENT</small></div></div>'
-            f'<h4>PIPELINE</h4>{link("overview", "Overview")}{link("run", "Run pipeline")}{link("companies", "Companies")}{link("method", "Method")}{link("settings", "ICP settings")}'
+            f'<h4>PIPELINE</h4>{link("overview", "Overview")}{link("run", "Run pipeline")}{link("companies", "Companies")}{link("prospects", "Prospects")}{link("method", "Method")}{link("settings", "ICP settings")}'
             f'<h4>HUMAN GATES</h4>{link("review", "Review queue", human)}{link("drafts", "Drafts &amp; sends", drafts)}'
             f'<h4>LEARNING</h4>{link("feedback", "Feedback loop")}'
             '<div class=note>The model reads and writes. Python rules decide. Every draft waits for you.<br><br>Case study build, not affiliated with Sprinto.</div></aside>'
@@ -528,6 +534,40 @@ def settings_page(snap):  # noqa: C901
             f'<p><button class="btn g" id=savecfg {dis}>Save settings</button> <button class=btn id=resetcfg {dis}>Reset to defaults</button> <span class=ok-t id=status></span></p>')
 
 
+def prospects_page(snap):
+    s = current_settings()
+    editable = db.enabled and not snap.get("db_error")
+    dis = "" if editable else "disabled"
+    have = {r["domain"] for r in snap["rows"]}
+    try:
+        sl = db.shortlist() if db.enabled else {}
+    except Exception:
+        sl = {}
+    regions = "".join(f'<label style="margin-right:14px"><input type=checkbox id=p_r_{c} {"checked" if c in s["regions"] else ""} {dis}> {n}</label>'
+                      for c, n in (("IN", "India"), ("US", "United States"), ("GB", "United Kingdom"), ("SG", "Singapore")))
+    rows = "".join(
+        f'<tr><td><b>{e(d)}</b></td><td>{e(v.get("funding_stage") or "added by you")}</td><td><small>{e((v.get("funding_source") or "")[:90])}</small></td>'
+        f'<td><span class="pill {"mute" if d in have else "ok"}">{"Researched" if d in have else "Waiting"}</span></td></tr>' for d, v in list(sl.items())[-60:]) \
+        or "<tr><td colspan=4><small>Nothing here yet. Search, or add your own domains.</small></td></tr>"
+    note = "" if editable else '<div class=warnbox>A database is needed to save prospects. Showing a read-only view.</div>'
+    return ('<div class=kicker>Pipeline</div><h1>Prospects</h1>'
+            '<p class=sub>Tell it where to look. It searches funding news for companies matching your keywords, checks each one has a real website, and queues them. '
+            'Run the queue from the Run page, or let the Monday run pick them up.</p>' + note +
+            f'<div class=grid2><div class=box style="margin-top:0"><h3>Search for prospects</h3>'
+            f'<label>Industries or topics to look for (comma separated, up to 5)</label>'
+            f'<textarea class=t id=p_kw style="min-height:70px" placeholder="e.g. cybersecurity, healthtech, HR tech, payments" {dis}>{e(", ".join(s["keywords"]))}</textarea>'
+            f'<small>Leave empty to use the built-in SaaS search. Funding stages come from ICP settings ({e(", ".join("Series " + x for x in s["stages"]))}).</small>'
+            f'<label>Regions</label><div style="margin:6px 0 10px">{regions}</div>'
+            f'<div class=row><button class="btn g" id=psearch {dis}>Save and search now</button><button class=btn id=psave {dis}>Save only</button></div></div>'
+            f'<div class=box style="margin-top:0"><h3>Add your own companies</h3>'
+            f'<label>Websites you already have in mind, one per line</label>'
+            f'<textarea class=t id=p_dom style="min-height:120px" placeholder="example.com" {dis}></textarea>'
+            f'<div class=row><button class="btn g" id=padd {dis}>Add to queue</button></div></div></div>'
+            f'<p><span class=ok-t id=status></span></p>'
+            f'<div class=box><h3>Queue ({len(sl)})</h3><table><tr><th>Company</th><th>Stage</th><th>Found in</th><th>Status</th></tr>{rows}</table>'
+            '<p><a class="btn p" href="/?p=run">Go to Run pipeline</a></p></div>')
+
+
 def page(url):
     q = {k: v[0] for k, v in parse_qs(urlparse(url).query).items()}
     tab, snap = q.get("p", "overview"), load()
@@ -542,6 +582,8 @@ def page(url):
         return shell("drafts", drafts(snap), snap)
     if tab == "feedback":
         return shell("feedback", feedback(snap), snap)
+    if tab == "prospects":
+        return shell("prospects", prospects_page(snap), snap)
     if tab == "settings":
         return shell("settings", settings_page(snap), snap)
     if tab == "method":
@@ -652,7 +694,7 @@ def do_shortlist(body):
     if not found:
         return 200, {"note": "Google News returned no usable companies right now. Try again later."}
     db.save_shortlist(shortlist.seeds(found))
-    return 200, {"note": f"Found {len(found)} recently funded companies."}
+    return 200, {"note": f"Found {len(found)} companies. They are in the queue below."}
 
 
 def do_settings(body):
@@ -660,13 +702,41 @@ def do_settings(body):
         db.set_settings(None)
         return 200, {"note": "Back to the defaults."}
     try:
-        db.set_settings(settings.validate(body.get("settings")))
+        cfg = body.get("settings")
+        if not isinstance(cfg, dict):
+            return 400, {"error": "Bad settings."}
+        stored = settings.effective(db.get_settings())  # the form does not carry the prospect search fields
+        db.set_settings(settings.validate({"keywords": stored["keywords"], "regions": stored["regions"], **cfg}))
     except ValueError as ex:
         return 400, {"error": str(ex)}
     return 200, {"note": "Saved. The next run uses these settings."}
 
 
-ROUTES = {"auto": do_auto, "settings": do_settings, "run": do_run, "fb": do_fb, "learn": do_learn, "shortlist": do_shortlist}
+def do_prospects(body):
+    try:
+        db.set_settings(settings.validate({**settings.effective(db.get_settings()),
+                                           "keywords": body.get("keywords", ""), "regions": body.get("regions") or []}))
+    except ValueError as ex:
+        return 400, {"error": str(ex)}
+    return 200, {"note": "Saved. The next search and the Monday run use these."}
+
+
+def do_adddomains(body):
+    raw = body.get("domains")
+    if not isinstance(raw, list):
+        return 400, {"error": "Enter at least one website."}
+    cleaned = [str(d).strip().lower().removeprefix("https://").removeprefix("http://").removeprefix("www.").split("/")[0] for d in raw]
+    domains = list(dict.fromkeys(d for d in cleaned if d))[:50]
+    if not domains:
+        return 400, {"error": "Enter at least one website."}
+    bad = [d for d in domains if not DOMAIN.match(d)]
+    if bad:
+        return 400, {"error": "Not a website address: " + bad[0][:60]}
+    db.save_shortlist({d: {} for d in domains}, keep_existing=True)
+    return 200, {"note": f"Added {len(domains)} to the queue. Run them from the Run page."}
+
+
+ROUTES = {"prospects": do_prospects, "adddomains": do_adddomains, "auto": do_auto, "settings": do_settings, "run": do_run, "fb": do_fb, "learn": do_learn, "shortlist": do_shortlist}
 
 
 class handler(BaseHTTPRequestHandler):

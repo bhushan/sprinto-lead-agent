@@ -18,7 +18,17 @@ import config
 
 QUERIES = ['"Series A" SaaS funding', '"Series B" SaaS funding', '"Series C" SaaS funding',
            '"Series A" fintech raises', '"Series B" B2B software startup', '"Series A" healthtech raises']
-REGIONS = [("en-IN", "IN", "IN:en"), ("en-US", "US", "US:en")]
+REGION_TABLE = {"IN": ("en-IN", "IN", "IN:en"), "US": ("en-US", "US", "US:en"),
+                "GB": ("en-GB", "GB", "GB:en"), "SG": ("en-SG", "SG", "SG:en")}
+KEYWORDS, REGION_CODES, STAGES = [], ["IN", "US"], "ABC"  # set from settings
+
+
+def queries():
+    """The user's own keywords (one news query each, any chosen stage), else the built-in SaaS queries."""
+    if not KEYWORDS:
+        return QUERIES
+    st = " OR ".join(f'"Series {c}"' for c in STAGES)
+    return [f"({st}) {kw} raises" for kw in KEYWORDS]
 STAGE = re.compile(r"\bseries ([abc])\b", re.I)
 EXCLUDE = re.compile(r"hardware|agency|consult|d2c|restaurant|real estate|ev maker|electric vehicle|drone|semiconductor|"
                      r"manufactur|apparel|brewery|pre-series", re.I)
@@ -29,8 +39,8 @@ MAX_AGE = timedelta(days=730)
 
 
 def headlines():
-    for q in QUERIES:
-        for hl, gl, ceid in REGIONS:
+    for q in queries():
+        for hl, gl, ceid in [REGION_TABLE[c] for c in REGION_CODES]:
             url = f"https://news.google.com/rss/search?q={quote(q)}+when:2y&hl={hl}&gl={gl}&ceid={ceid}"
             try:
                 root = ET.fromstring(requests.get(url, timeout=15, headers={"User-Agent": config.USER_AGENT}).content)

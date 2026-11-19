@@ -96,3 +96,10 @@ sign-in before sharing the address widely.
 one by one until the chosen number qualify (up to 5 looked at per click). Every run gets an id; the Overview run
 selector, the status chip and the Companies filters use it. `vercel.json` also schedules the same job every Monday
 05:00 UTC through Vercel Cron; the route only accepts Vercel's `CRON_SECRET` bearer header.
+
+## Prospects
+
+The Prospects page saves your own search keywords (up to 5, e.g. "cybersecurity, healthtech") and regions (India, US,
+UK, Singapore). "Save and search now" turns each keyword into a Google News funding query for the ICP stages, resolves
+each company to a website, and adds it to the queue; you can also paste your own websites. The Run page then researches
+the queue, and the Monday run uses the same keywords. The built-in SaaS search is used when no keywords are set.

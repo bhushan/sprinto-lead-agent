@@ -40,4 +40,16 @@ settings.apply(settings.validate({**settings.DEFAULTS, "threshold": 90}))
 assert run.process("finlytic.example")["status"] == "not_qualified"
 settings.apply(settings.DEFAULTS)
 assert run.process("finlytic.example")["status"] == "drafted"
+import shortlist  # prospect search: keywords become queries; bad keywords and empty regions are rejected
+settings.apply(settings.validate({**settings.DEFAULTS, "keywords": "cybersecurity, healthtech"}))
+assert len(shortlist.queries()) == 2 and "cybersecurity" in shortlist.queries()[0]
+for bad in ({"keywords": "a;b"}, {"keywords": "a,b,c,d,e,f"}, {"regions": []}):
+    try:
+        settings.validate({**settings.DEFAULTS, **bad}); raise SystemExit(f"{bad} was accepted")
+    except ValueError:
+        pass
+settings.apply(settings.DEFAULTS)
+assert shortlist.queries() == shortlist.QUERIES
+db.save_shortlist({"a.com": {"funding_stage": "Series A"}}); db.save_shortlist({"a.com": {}, "b.com": {}}, keep_existing=True)
+assert db.shortlist() == {"a.com": {"funding_stage": "Series A"}, "b.com": {}}
 print("ok")

@@ -91,11 +91,11 @@ def runs(limit=10):
     return [{"ts": t, "n": n, "drafted": d} for t, n, d in _sql("select ts, n, drafted from runs order by ts desc limit " + str(int(limit)))]
 
 
-def save_shortlist(seeds):
-    """seeds: {domain: evidence dict}. Replaces the stored shortlist."""
-    _sql("delete from shortlist")
+def save_shortlist(seeds, keep_existing=False):
+    """seeds: {domain: evidence dict}. Adds to the stored shortlist; keep_existing leaves known domains untouched."""
     for d, v in seeds.items():
-        _sql("insert into shortlist(domain, data) values(?, ?)", (d, json.dumps(v, ensure_ascii=False)))
+        _sql("insert into shortlist(domain, data) values(?, ?) on conflict(domain) do "
+             + ("nothing" if keep_existing else "update set data = excluded.data"), (d, json.dumps(v, ensure_ascii=False)))
 
 
 def shortlist():

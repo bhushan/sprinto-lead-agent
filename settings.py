@@ -29,6 +29,8 @@ DEFAULTS = {
               "founder": ["founder", "ceo", "chief executive"]},
     "sender": "Piyush",
     "target": 3,
+    "keywords": [],
+    "regions": ["IN", "US"],
 }
 
 
@@ -43,7 +45,7 @@ def _int(v, lo, hi, label):
 
 
 def _words(v, most, label):
-    items = [w.strip().lower() for w in (v if isinstance(v, list) else str(v or "").split(","))]
+    items = [w.strip().lower() for w in (v if isinstance(v, list) else str(v or "").replace("\n", ",").split(","))]
     items = [w for w in items if w]
     if len(items) > most or any(len(w) > 40 or not re.fullmatch(r"[a-z0-9 .&'-]+", w) for w in items):
         raise ValueError(f"{label}: use plain words or phrases separated by commas (at most {most}).")
@@ -72,6 +74,11 @@ def validate(raw):
         raise ValueError("Sender name: letters only, up to 40.")
     s["sender"] = sender
     s["target"] = _int(raw.get("target", 3), 1, 5, "Qualified target")
+    s["keywords"] = _words(raw.get("keywords", DEFAULTS["keywords"]), 5, "Search keywords")
+    regions = sorted({c for c in (raw.get("regions", DEFAULTS["regions"]) or []) if c in shortlist.REGION_TABLE})
+    if not regions:
+        raise ValueError("Pick at least one region.")
+    s["regions"] = regions
     return s
 
 
@@ -93,5 +100,6 @@ def apply(s):
     qualify.STAGES_TEXT = ", ".join("Series " + x for x in s["stages"])
     contacts.TIERS = [(re.compile("|".join(_phrase(k) for k in s["roles"][name]), re.I), score, why)
                       for name, score, why in ROLES if s["roles"][name]]
+    shortlist.KEYWORDS, shortlist.REGION_CODES, shortlist.STAGES = s["keywords"], s["regions"], "".join(s["stages"])
     shortlist.STAGE = re.compile(r"\bseries ([%s])\b" % "".join(s["stages"]), re.I)
     shortlist.EXCLUDE = re.compile("|".join(re.escape(w) for w in s["exclude"]) or r"(?!x)x", re.I)
