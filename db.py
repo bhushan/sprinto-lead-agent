@@ -13,6 +13,7 @@ SCHEMA = [
     "create table if not exists events(ts text, domain text, kind text, data text)",
     "create table if not exists learnings(ts text, rule text)",
     "create table if not exists runs(ts text, n integer, drafted integer)",
+    "create table if not exists shortlist(domain text primary key, data text)",
 ]
 _ready = False
 
@@ -83,3 +84,14 @@ def add_run(n, drafted):
 
 def runs(limit=10):
     return [{"ts": t, "n": n, "drafted": d} for t, n, d in _sql("select ts, n, drafted from runs order by ts desc limit " + str(int(limit)))]
+
+
+def save_shortlist(seeds):
+    """seeds: {domain: evidence dict}. Replaces the stored shortlist."""
+    _sql("delete from shortlist")
+    for d, v in seeds.items():
+        _sql("insert into shortlist(domain, data) values(?, ?)", (d, json.dumps(v, ensure_ascii=False)))
+
+
+def shortlist():
+    return {d: json.loads(x) for d, x in _sql("select domain, data from shortlist")}

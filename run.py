@@ -12,7 +12,7 @@ import scrape
 import send
 
 
-def process(domain, contacts_path="data/contacts.csv", approved=False, seed=None, lessons=None):
+def process(domain, contacts_path="data/contacts.csv", approved=False, seed=None, lessons=None, contact=None):
     """Run the 7 steps for one domain. Always returns a row that records why it ended where it did."""
     t0 = time.time()
     row = {"domain": domain, "needs_human": False, "flags": [], "fetches": 0}
@@ -33,7 +33,9 @@ def process(domain, contacts_path="data/contacts.csv", approved=False, seed=None
         return end(q["status"], q["reason"])
 
     facts = q["facts"]
-    contact, why = contacts.find_contact(domain, facts.get("headcount"), contacts_path)
+    why = "added by a reviewer"
+    if not contact:
+        contact, why = contacts.find_contact(domain, facts.get("headcount"), contacts_path)
     if not contact:
         return end("no_contact", why, human=True)
     row["contact"] = {**contact, "why": why}

@@ -29,6 +29,7 @@ import drafts as drafts_mod  # noqa: E402
 import impact  # noqa: E402
 import qualify  # noqa: E402
 import run  # noqa: E402
+import shortlist  # noqa: E402
 
 config.OFFLINE = not config.API_KEY  # live whenever a Gemini key is configured
 APP_PASSWORD = os.getenv("APP_PASSWORD", "")
@@ -119,6 +120,11 @@ document.querySelectorAll('.resolve').forEach(b=>{
 });
 const go=(sel,p,data,wait)=>{const b=document.querySelector(sel);if(!b)return;b.onclick=()=>{const m=document.querySelector('#status');b.disabled=true;m.textContent=wait;
   post(p,data()).then(j=>{m.textContent=j.note||'Done';setTimeout(()=>location.reload(),600)}).catch(x=>{m.textContent=x.message;b.disabled=false})}};
+document.querySelectorAll('.act').forEach(b=>{b.onclick=()=>{const c=b.closest('.box'),m=c.querySelector('.amsg'),d=b.dataset.d,data={domains:[d]};
+  const n=c.querySelector('.cn'),t=c.querySelector('.ct');if(n)data.contact={name:n.value,title:t.value};
+  b.disabled=true;m.textContent='Running, up to a minute...';
+  post('run',data).then(j=>{m.textContent=j.note;setTimeout(()=>location.reload(),700)}).catch(x=>{m.textContent=x.message;b.disabled=false})}});
+go('#find','shortlist',()=>({}),'Searching Google News and checking homepages, about a minute...');
 go('#go','run',()=>({domains:document.querySelector('#doms').value.split(/[\\s,]+/).filter(Boolean)}),'Running, this takes up to 3 minutes. Keep this tab open.');
 go('#short','run',()=>({shortlist:true}),'Running the next companies from the shortlist, up to 3 minutes. Keep this tab open.');
 go('#learn','learn',()=>({}),'Learning from your edits and ratings...');
@@ -262,11 +268,21 @@ def company(snap, domain):
 
 def review(snap):
     rows = [r for r in snap["rows"] if r["needs_human"]]
+    off = "disabled" if live_missing() else ""
+
+    def action(r):
+        d = e(r["domain"])
+        if r["status"] == "no_contact":
+            return (f'<div class=row style="margin-top:8px"><input class="t cn" style="max-width:200px;margin:0" placeholder="Contact name">'
+                    f'<input class="t ct" style="max-width:220px;margin:0" placeholder="Title, e.g. CTO">'
+                    f'<button class="btn g act" data-d="{d}" {off}>Add contact and draft</button><span class="ok-t amsg"></span></div>')
+        return f'<div class=row style="margin-top:8px"><button class="btn act" data-d="{d}" {off}>Re-run this company</button><span class="ok-t amsg"></span></div>'
+
     cards = "".join(
         f'<div class=box><div class=row><b>{e(r["domain"])}</b><span class="pill warn">{e(r["status"].replace("_", " "))}</span>'
         f'<a class=btn style="margin-left:auto" href="/?p=company&d={quote(r["domain"])}">Open</a>'
         f'<button class="btn resolve" data-d="{e(r["domain"])}">Mark resolved</button></div>'
-        f'<p style="margin:8px 0 4px">{e(r["reason"])}</p><div class=q><b>Do this:</b> {e(TODO.get(r["status"], ""))}</div></div>' for r in rows)
+        f'<p style="margin:8px 0 4px">{e(r["reason"])}</p><div class=q><b>Do this:</b> {e(TODO.get(r["status"], ""))}</div>{action(r)}</div>' for r in rows)
     return ('<div class=kicker>Human gate</div><h1>Review queue</h1><p class=sub>Companies the rules could not settle. '
             'Nothing here is guessed: each one waits for a person.</p>' + (cards or '<div class=box>Nothing is waiting on you.</div>'))
 
@@ -380,14 +396,17 @@ def run_page(snap, demo):
                 'Add them in the Vercel project settings and redeploy.</div>')
     else:
         try:
+            have = {r["domain"] for r in snap["rows"]}
+            waiting = sum(d not in have for d in db.shortlist())
             hist = "".join(f"<tr><td><small>{e(x['ts'][:16].replace('T', ' '))}</small></td><td>{x['n']} companies</td><td>{x['drafted']} drafted</td></tr>" for x in db.runs()) \
                 or "<tr><td colspan=3><small>No runs yet.</small></td></tr>"
         except Exception as ex:
-            hist = f"<tr><td colspan=3><small>Database error: {e(str(ex)[:120])}</small></td></tr>"
+            waiting, hist = 0, f"<tr><td colspan=3><small>Database error: {e(str(ex)[:120])}</small></td></tr>"
         live = (f'<div class=box><h3>Live run (real sites, Gemini and Hunter)</h3><p class=sub style="margin-bottom:8px">Up to {MAX_PER_RUN} companies per run, about 30 seconds each. '
                 'Each one that reaches the contact step spends one Hunter search.</p>'
                 '<textarea class="t dom" id=doms placeholder="One domain per line, e.g. example.com"></textarea>'
-                '<div class=row><button class="btn g" id=go>Run these domains</button><button class=btn id=short>Run the next companies from the shortlist</button>'
+                f'<div class=row><button class="btn g" id=go>Run these domains</button><button class=btn id=find>Find new companies</button>'
+                f'<button class=btn id=short>Run the next from the shortlist ({waiting} waiting)</button>'
                 f'<span class=ok-t id=status></span></div></div><div class=box><h3>Recent runs</h3><table>{hist}</table></div>')
     return ('<div class=kicker>Run</div><h1>Run the pipeline</h1>'
             '<p class=sub>Results land in Companies, Review queue and Drafts &amp; sends. Nothing is emailed from here.</p>'
@@ -419,23 +438,30 @@ def do_run(body):
     since = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat(timespec="seconds")
     if sum(x["ts"] > since for x in db.runs(20)) >= MAX_RUNS_PER_HOUR:
         return 429, {"error": f"Run limit reached ({MAX_RUNS_PER_HOUR} an hour). Try again later."}
+    sl = ROOT / "data/shortlist.json"
+    seeds = {**(json.loads(sl.read_text(encoding="utf-8")) if sl.exists() else {}), **db.shortlist()}
     if body.get("shortlist"):
         have = {r["domain"] for r in db.companies()}
-        domains = [d for d in (ROOT / "data/shortlist.txt").read_text().split() if d not in have]
+        domains = [d for d in (db.shortlist() or seeds) if d not in have]
     else:
         domains = [str(d).strip().lower() for d in body.get("domains", [])]
     domains = list(dict.fromkeys(domains))[:MAX_PER_RUN]
     if not domains:
-        return 400, {"error": "No new domains to run."}
+        return 400, {"error": "No new domains to run. Use Find new companies first."}
     bad = [d for d in domains if not DOMAIN.match(d)]
     if bad:
         return 400, {"error": "Not a domain name: " + bad[0]}
-    sl = ROOT / "data/shortlist.json"
-    seeds = json.loads(sl.read_text(encoding="utf-8")) if sl.exists() else {}
+    given = None  # a reviewer-supplied contact for a single company whose contact Hunter could not find
+    c = body.get("contact")
+    if isinstance(c, dict) and len(domains) == 1:
+        name, title = str(c.get("name", "")).strip()[:80], str(c.get("title", "")).strip()[:80]
+        if not name or not title:
+            return 400, {"error": "Enter both a name and a title."}
+        given = {"name": name, "title": title}
     lessons = db.learnings()
     rows = []
     for d in domains:
-        r = run.public(run.process(d, str(ROOT / "data/contacts.csv"), False, seeds.get(d), lessons))
+        r = run.public(run.process(d, str(ROOT / "data/contacts.csv"), False, seeds.get(d), lessons, given))
         db.save_company(r)
         rows.append(r)
     drafted = count(rows, "drafted")
@@ -463,7 +489,15 @@ def do_learn(body):
     return 200, {"note": f"Learned {len(rules)} rules."}
 
 
-ROUTES = {"run": do_run, "fb": do_fb, "learn": do_learn}
+def do_shortlist(body):
+    found = shortlist.find(15)
+    if not found:
+        return 200, {"note": "Google News returned no usable companies right now. Try again later."}
+    db.save_shortlist(shortlist.seeds(found))
+    return 200, {"note": f"Found {len(found)} recently funded companies."}
+
+
+ROUTES = {"run": do_run, "fb": do_fb, "learn": do_learn, "shortlist": do_shortlist}
 
 
 class handler(BaseHTTPRequestHandler):
@@ -490,7 +524,7 @@ class handler(BaseHTTPRequestHandler):
                 code, out = 401, {"error": "Wrong or missing access password."}
             elif not db.enabled:
                 code, out = 503, {"error": "No database is connected."}
-            elif route is not do_fb and not config.API_KEY:
+            elif route in (do_run, do_learn) and not config.API_KEY:
                 code, out = 503, {"error": "GEMINI_API_KEY is not set."}
             else:
                 code, out = route(body)

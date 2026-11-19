@@ -60,7 +60,8 @@ def resolve(name, headline):
     return None
 
 
-def main(n):
+def find(n):
+    """Return {domain: {name, stage, headline, url, date}} for up to n recently funded companies."""
     now, found = datetime.now(timezone.utc), {}
     for title, link, when in sorted(headlines(), key=lambda h: h[2], reverse=True):
         stage, m = STAGE.search(title), NAME.match(title)
@@ -68,18 +69,28 @@ def main(n):
             continue
         found.setdefault(m.group(1), dict(stage=f"Series {stage.group(1).upper()}", headline=title, url=link, date=when.date().isoformat()))
     out = {}
-    for name, info in found.items():
+    for name, info in list(found.items())[:n * 3]:  # bounded: each name costs up to 5 homepage requests
         domain = resolve(name, info["headline"])
         if domain and domain not in out:
             out[domain] = {"name": name, **info}
-            print(f"{domain:28} {info['stage']}  {info['headline'][:70]}")
         if len(out) >= n:
             break
+    return out
+
+
+def seeds(found):
+    """The evidence run.py stores for the 'right stage?' question."""
+    return {d: {"funding_stage": i["stage"], "funding_source": i["headline"], "funding_url": i["url"], "funding_date": i["date"]}
+            for d, i in found.items()}
+
+
+def main(n):
+    out = find(n)
+    for d, i in out.items():
+        print(f"{d:28} {i['stage']}  {i['headline'][:70]}")
     Path("data").mkdir(exist_ok=True)
     Path("data/shortlist.txt").write_text("\n".join(out) + "\n", encoding="utf-8")
-    Path("data/shortlist.json").write_text(json.dumps(
-        {d: {"funding_stage": i["stage"], "funding_source": i["headline"], "funding_url": i["url"], "funding_date": i["date"]}
-         for d, i in out.items()}, indent=1, ensure_ascii=False), encoding="utf-8")
+    Path("data/shortlist.json").write_text(json.dumps(seeds(out), indent=1, ensure_ascii=False), encoding="utf-8")
     print(f"{len(out)} domains -> data/shortlist.txt")
 
 
