@@ -73,7 +73,7 @@ Needed in the Vercel project's environment variables:
 | `DATABASE_URL` | Postgres. Add Neon from the Vercel Marketplace (Storage tab) and it sets this for you |
 | `GEMINI_API_KEY` | Live runs and learning |
 | `HUNTER_API_KEY` | Contacts for live runs (one search per company that reaches that step) |
-| `APP_PASSWORD` | Anything that spends credits or writes data asks for it. Without it the site stays read-only |
+| `APP_PASSWORD` | Optional. If set, runs, learning and feedback ask for it. If not, runs are capped at 3 an hour for everyone to protect credits |
 
 - **Run pipeline** (web): up to 5 companies per run (about 30 s each, inside the 300 s limit), from a list you
   type or the next ones in `data/shortlist.txt`. Results are saved and show up everywhere.

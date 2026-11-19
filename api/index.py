@@ -11,6 +11,7 @@ import re
 import sys
 import tempfile
 import time
+from datetime import datetime, timedelta, timezone
 from html import escape as e
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
@@ -33,6 +34,7 @@ config.OFFLINE = not config.API_KEY  # live whenever a Gemini key is configured
 APP_PASSWORD = os.getenv("APP_PASSWORD", "")
 DOMAIN = re.compile(r"^(?=.{4,100}$)([a-z0-9-]+\.)+[a-z]{2,}$")  # rejects IPs and localhost
 MAX_PER_RUN = 5  # ~30 s per company; stays inside the 300 s function limit
+MAX_RUNS_PER_HOUR = 3  # protects Gemini and Hunter credits when APP_PASSWORD is not set
 
 STATUS = {  # label, css class
     "drafted": ("Email drafted", "ok"), "not_qualified": ("Not qualified", "mute"),
@@ -96,7 +98,7 @@ textarea.dom{min-height:110px}.row{display:flex;gap:8px;flex-wrap:wrap;align-ite
 JS = """
 const S=(k,v)=>{try{v===undefined?localStorage.removeItem(k):localStorage.setItem(k,v)}catch(e){}};
 const G=k=>{try{return localStorage.getItem(k)}catch(e){return null}};
-const tok=()=>{let t=G('token');if(!t){t=prompt('Access password');if(t)S('token',t)}return t};
+const tok=()=>{if(!NEEDPW)return '';let t=G('token');if(!t){t=prompt('Access password');if(t)S('token',t)}return t};
 const post=(p,data)=>fetch('/?p='+p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...data,token:tok()})})
   .then(r=>r.json().then(j=>{if(r.status===401)S('token');if(!r.ok)throw new Error(j.error||'failed');return j}));
 document.querySelectorAll('.draft').forEach(d=>{
@@ -159,8 +161,8 @@ def load():
 
 def live_missing():
     """What is still needed before the browser can run the pipeline."""
-    return [name for name, ok in (("DATABASE_URL (add Neon from the Vercel Marketplace)", db.enabled),
-                                  ("GEMINI_API_KEY", bool(config.API_KEY)), ("APP_PASSWORD", bool(APP_PASSWORD))) if not ok]
+    return [name for name, ok in (("DATABASE_URL (the Neon connection string)", db.enabled),
+                                  ("GEMINI_API_KEY", bool(config.API_KEY))) if not ok]
 
 
 def count(rows, *st):
@@ -177,7 +179,7 @@ def shell(tab, body, snap, q=""):
 
     when = f'Last run <b>{e(snap["generated"][:10])}</b>' if snap["generated"] else "No run yet"
     return ('<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">'
-            f'<title>Outreach Agent</title><style>{CSS}</style><div class=app><aside>'
+            f'<title>Outreach Agent</title><style>{CSS}</style><script>const NEEDPW={"true" if APP_PASSWORD else "false"};</script><div class=app><aside>'
             '<div class=brand><i></i><div>OUTREACH<small>AGENT</small></div></div>'
             f'<h4>PIPELINE</h4>{link("overview", "Overview")}{link("run", "Run pipeline")}{link("companies", "Companies")}{link("method", "Method")}'
             f'<h4>HUMAN GATES</h4>{link("review", "Review queue", human)}{link("drafts", "Drafts &amp; sends", drafts)}'
@@ -413,6 +415,10 @@ def page(url):
 
 
 def do_run(body):
+    # no password is set, so cap spend instead: at most MAX_RUNS_PER_HOUR runs an hour, for everyone
+    since = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat(timespec="seconds")
+    if sum(x["ts"] > since for x in db.runs(20)) >= MAX_RUNS_PER_HOUR:
+        return 429, {"error": f"Run limit reached ({MAX_RUNS_PER_HOUR} an hour). Try again later."}
     if body.get("shortlist"):
         have = {r["domain"] for r in db.companies()}
         domains = [d for d in (ROOT / "data/shortlist.txt").read_text().split() if d not in have]
@@ -480,7 +486,7 @@ class handler(BaseHTTPRequestHandler):
             route = ROUTES.get(parse_qs(urlparse(self.path).query).get("p", [""])[0])
             if not route:
                 code, out = 404, {"error": "Unknown action."}
-            elif not APP_PASSWORD or not hmac.compare_digest(str(body.get("token", "")), APP_PASSWORD):
+            elif APP_PASSWORD and not hmac.compare_digest(str(body.get("token", "")), APP_PASSWORD):
                 code, out = 401, {"error": "Wrong or missing access password."}
             elif not db.enabled:
                 code, out = 503, {"error": "No database is connected."}

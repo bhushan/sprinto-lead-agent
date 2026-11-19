@@ -2,6 +2,7 @@
 import os
 import tempfile
 os.environ["OFFLINE"] = "1"
+os.environ["DATABASE_URL"] = os.environ["POSTGRES_URL"] = ""  # never touch a real database from a test
 os.environ["SQLITE_PATH"] = os.path.join(tempfile.mkdtemp(), "t.db")
 import run
 
