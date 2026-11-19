@@ -89,3 +89,10 @@ unknown funding stage, which funding stages count, sectors to skip in Find new c
 Evidence Map question may fetch, the job-title words used to pick the contact, and the sender name. They apply to the
 next run. `settings.py` holds the defaults and the validation. Anyone who can open the site can change them, so add
 sign-in before sharing the address widely.
+
+## One-click run and the weekly schedule
+
+"Find companies for me" (Run page) refreshes the funding shortlist when nothing is waiting, then researches companies
+one by one until the chosen number qualify (up to 5 looked at per click). Every run gets an id; the Overview run
+selector, the status chip and the Companies filters use it. `vercel.json` also schedules the same job every Monday
+05:00 UTC through Vercel Cron; the route only accepts Vercel's `CRON_SECRET` bearer header.

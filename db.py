@@ -79,8 +79,12 @@ def set_learnings(rules):
         _sql("insert into learnings(ts, rule) values(?, ?)", (_now(), r))
 
 
-def add_run(n, drafted):
-    _sql("insert into runs(ts, n, drafted) values(?, ?, ?)", (_now(), n, drafted))
+def now():
+    return _now()
+
+
+def add_run(n, drafted, ts=None):
+    _sql("insert into runs(ts, n, drafted) values(?, ?, ?)", (ts or _now(), n, drafted))
 
 
 def runs(limit=10):

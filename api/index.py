@@ -55,7 +55,8 @@ STEPS = [("Shortlist", "Funded SaaS from Google News", 0), ("Scrape", "One cache
          ("Draft", "By name, with a specific hook", 0), ("Review", "A human approves", 1), ("Send", "To your inbox only", 1)]
 
 CSS = """
-:root{--navy:#0b2545;--navy2:#13315c;--blue:#2563eb;--green:#10b981;--green-d:#047857;--bg:#f3f7fb;--panel:#fff;--line:#dfe7f1;--text:#0f1d33;--mute:#62748e}
+:root{--soft:#fafcff;--soft2:#e8eff8;--hover:#f6faff;--okbg:#ecfdf5;--navy:#0b2545;--navy2:#13315c;--blue:#2563eb;--green:#10b981;--green-d:#047857;--bg:#f3f7fb;--panel:#fff;--line:#dfe7f1;--text:#0f1d33;--mute:#62748e}
+[data-theme=dark]{--bg:#0a1220;--panel:#111b2e;--line:#22314b;--text:#e7eefa;--mute:#8fa3c2;--soft:#0f182a;--soft2:#1b2a44;--hover:#15233a;--okbg:#0d2a22;--navy:#dbe7fb;--green-d:#34d399}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.55 Inter,system-ui,-apple-system,Segoe UI,sans-serif}
 a{color:inherit;text-decoration:none}.app{display:grid;grid-template-columns:236px 1fr;min-height:100vh}
 aside{background:linear-gradient(180deg,var(--navy),var(--navy2));color:#cfe0f5;padding:20px 14px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column}
@@ -78,15 +79,15 @@ h1{font-size:34px;letter-spacing:-.03em;margin:6px 0 4px}h2{font-size:20px;lette
 .card b{display:block;font-size:34px;letter-spacing:-.03em;color:var(--navy)}.card span{color:var(--mute);font-size:13px}.card.hi b{color:var(--green-d)}
 .box{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;margin-top:16px}.box h3{margin:0 0 8px;font-size:12px;color:var(--mute);font-weight:600;text-transform:uppercase;letter-spacing:.08em}
 .flow{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:12px}
-.step{border:1px solid var(--line);border-radius:14px;padding:12px;background:#fafcff}.step small{display:flex;align-items:center;gap:6px;color:var(--mute);font-size:11px;font-weight:600}
+.step{border:1px solid var(--line);border-radius:14px;padding:12px;background:var(--soft)}.step small{display:flex;align-items:center;gap:6px;color:var(--mute);font-size:11px;font-weight:600}
 .step small i{width:9px;height:9px;border-radius:50%;background:var(--blue)}.step.h small i{background:var(--green)}.step p{margin:3px 0 0;color:var(--mute);font-size:13px}
 .legend{float:right;font-size:12px;color:var(--mute)}.legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin:0 4px 0 12px}
 .fun{display:grid;gap:10px;margin-top:10px}.fun div{display:grid;grid-template-columns:150px 1fr 36px;gap:12px;align-items:center;font-size:14px}
-.bar{height:10px;border-radius:99px;background:#e8eff8;overflow:hidden}.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--blue),var(--green))}
+.bar{height:10px;border-radius:99px;background:var(--soft2);overflow:hidden}.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--blue),var(--green))}
 table{width:100%;border-collapse:collapse}th{text-align:left;color:var(--mute);font-weight:600;font-size:11px;letter-spacing:.08em;text-transform:uppercase;padding:8px 10px}
-td{padding:12px 10px;border-top:1px solid var(--line);vertical-align:top}tr.l{cursor:pointer}tr.l:hover td{background:#f6faff}td small{color:var(--mute)}
+td{padding:12px 10px;border-top:1px solid var(--line);vertical-align:top}tr.l{cursor:pointer}tr.l:hover td{background:var(--hover)}td small{color:var(--mute)}
 .pill{display:inline-block;padding:2px 10px;border-radius:99px;font-size:12px;border:1px solid var(--line);white-space:nowrap;background:#fff}
-.pill.ok{color:var(--green-d);border-color:#a7e8cf;background:#ecfdf5}.pill.warn{color:#a15c07;border-color:#f6d49a;background:#fffaf0}.pill.mute{color:var(--mute)}
+.pill.ok{color:var(--green-d);border-color:#a7e8cf;background:var(--okbg)}.pill.warn{color:#a15c07;border-color:#f6d49a;background:#fffaf0}.pill.mute{color:var(--mute)}
 .chips a{display:inline-block;margin:0 6px 8px 0;padding:4px 12px;border:1px solid var(--line);border-radius:99px;font-size:13px;color:var(--mute);background:#fff}.chips a.on{background:var(--navy);color:#fff;border-color:var(--navy)}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .q{border-left:3px solid var(--blue);padding:2px 0 2px 10px;margin:8px 0;color:var(--mute);font-size:13px}.q b{color:var(--text)}
@@ -94,11 +95,25 @@ pre{white-space:pre-wrap;font:14px/1.6 ui-monospace,Consolas,monospace;margin:0}
 input.t,textarea.t{width:100%;border:1px solid var(--line);border-radius:10px;padding:9px 12px;font:inherit;background:#fff;margin:4px 0 8px}textarea.t{min-height:190px;font:14px/1.6 ui-monospace,Consolas,monospace}
 textarea.dom{min-height:110px}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.ok-t{color:var(--green-d);font-weight:600;font-size:13px}
 .box>label{display:block;font-size:13px;color:var(--mute);margin-top:8px}
+.chip{display:inline-flex;gap:8px;align-items:center;border:1px solid var(--line);border-radius:99px;padding:6px 12px;font-size:13px;background:var(--panel);color:var(--mute);white-space:nowrap}
+.chip i{width:8px;height:8px;border-radius:50%;background:var(--green)}.kbd{font-size:11px;border:1px solid var(--line);border-radius:6px;padding:0 6px;color:var(--mute)}
+.statgrid{display:grid;grid-template-columns:repeat(3,1fr);background:var(--panel);border:1px solid var(--line);border-radius:18px;overflow:hidden}
+.statgrid>div{padding:18px;border-right:1px solid var(--line);border-bottom:1px solid var(--line)}.statgrid>div:nth-child(3n){border-right:0}.statgrid>div:nth-last-child(-n+3){border-bottom:0}
+.statgrid small{color:var(--mute);font-size:11px;letter-spacing:.1em;text-transform:uppercase}.statgrid b{display:block;font-size:34px;letter-spacing:-.03em;color:var(--navy)}.statgrid span{color:var(--mute);font-size:13px}
+.statgrid b em{font-style:normal;font-size:16px;color:var(--mute);font-weight:500}
+.nodes{display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:8px;margin-top:14px;text-align:center}
+.node{border:1px solid var(--line);border-radius:14px;padding:12px 6px;background:var(--soft)}.node .c{width:34px;height:34px;border-radius:50%;margin:0 auto 6px;display:grid;place-items:center;background:var(--blue);color:#fff;font-weight:700;font-size:13px}
+.node.h .c{background:var(--green);color:#04281f}.node b{display:block;font-size:13px}.node small{display:block;color:var(--mute);font-size:11px}.node em{display:block;font-style:normal;font-size:22px;font-weight:700;color:var(--navy)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:12px;overflow:hidden}.seg button{border:0;background:var(--panel);padding:8px 18px;font:inherit;cursor:pointer;color:var(--text)}.seg button.on{background:var(--blue);color:#fff}
+.num{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--soft2);color:var(--blue);font-size:12px;font-weight:700;margin-right:10px}
+.runsel{padding:8px 12px;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--text);font:inherit}
+.drop{display:grid;grid-template-columns:1fr 40px;gap:10px;align-items:center;margin:8px 0;font-size:14px}
 .warnbox{background:#fffaf0;border:1px solid #f6d49a;color:#7a4a05;border-radius:12px;padding:12px 14px;margin:14px 0;font-size:14px}
 @media(max-width:860px){.app{grid-template-columns:1fr}aside{position:static;height:auto}.grid2{grid-template-columns:1fr}.fun div{grid-template-columns:100px 1fr 30px}main{padding:18px}.top{padding:12px 18px}}
 """
 
 JS = """
+try{document.documentElement.dataset.theme=localStorage.getItem('theme')||''}catch(e){}
 const S=(k,v)=>{try{v===undefined?localStorage.removeItem(k):localStorage.setItem(k,v)}catch(e){}};
 const G=k=>{try{return localStorage.getItem(k)}catch(e){return null}};
 const tok=()=>{if(!NEEDPW)return '';let t=G('token');if(!t){t=prompt('Access password');if(t)S('token',t)}return t};
@@ -126,13 +141,17 @@ document.querySelectorAll('.act').forEach(b=>{b.onclick=()=>{const c=b.closest('
   const n=c.querySelector('.cn'),t=c.querySelector('.ct');if(n)data.contact={name:n.value,title:t.value};
   b.disabled=true;m.textContent='Running, up to a minute...';
   post('run',data).then(j=>{m.textContent=j.note;setTimeout(()=>location.reload(),700)}).catch(x=>{m.textContent=x.message;b.disabled=false})}});
+document.addEventListener('keydown',ev=>{if((ev.ctrlKey||ev.metaKey)&&ev.key==='k'){ev.preventDefault();const q=document.querySelector('#gq');if(q)q.focus()}});
+const th=document.querySelector('#theme');if(th)th.onclick=()=>{const d=document.documentElement.dataset.theme==='dark'?'':'dark';document.documentElement.dataset.theme=d;S('theme',d)};
+let target=3;document.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.seg button').forEach(x=>x.classList.remove('on'));b.classList.add('on');target=+b.dataset.n});
+go('#auto','auto',()=>({target}),'Finding companies, researching them and stopping when enough qualify. This takes up to 4 minutes, keep this tab open.');
 go('#find','shortlist',()=>({}),'Searching Google News and checking homepages, about a minute...');
 go('#go','run',()=>({domains:document.querySelector('#doms').value.split(/[\\s,]+/).filter(Boolean)}),'Running, this takes up to 3 minutes. Keep this tab open.');
 go('#short','run',()=>({shortlist:true}),'Running the next companies from the shortlist, up to 3 minutes. Keep this tab open.');
 const form=()=>{const v=id=>document.querySelector('#'+id).value,csv=id=>v(id);
   return {threshold:v('s_threshold'),stage_penalty:v('s_penalty'),stages:['A','B','C'].filter(x=>document.querySelector('#s_stage_'+x).checked),
    exclude:csv('s_exclude'),limits:{certified:v('s_l_certified'),saas:v('s_l_saas'),stage:v('s_l_stage')},
-   roles:{security:csv('s_r_security'),engineering:csv('s_r_engineering'),founder:csv('s_r_founder')},sender:v('s_sender')}};
+   roles:{security:csv('s_r_security'),engineering:csv('s_r_engineering'),founder:csv('s_r_founder')},sender:v('s_sender'),target:v('s_target')}};
 go('#savecfg','settings',()=>({settings:form()}),'Saving...');
 go('#resetcfg','settings',()=>({reset:true}),'Resetting to defaults...');
 go('#learn','learn',()=>({}),'Learning from your edits and ratings...');
@@ -168,7 +187,8 @@ def load():
             for r in snap["rows"]:
                 db.save_company(r)
             rows = db.companies()
-        return {"rows": rows, "generated": db.last_update(), "hunter_left": hunter_left(snap["hunter_left"]), "db": True}
+        return {"rows": rows, "generated": db.last_update(), "hunter_left": hunter_left(snap["hunter_left"]), "db": True,
+                "runs": db.runs(20), "unseen": sum(d not in {r["domain"] for r in rows} for d in db.shortlist())}
     except Exception as ex:  # a broken database must not take the read-only pages down
         return {**snap, "db_error": str(ex)[:160]}
 
@@ -183,15 +203,25 @@ def count(rows, *st):
     return sum(r["status"] in st for r in rows)
 
 
+def ago(iso):
+    try:
+        mins = int((datetime.now(timezone.utc) - datetime.fromisoformat(iso)).total_seconds() // 60)
+    except (TypeError, ValueError):
+        return ""
+    return f"{mins}m ago" if mins < 90 else f"{mins // 60}h ago" if mins < 2880 else f"{mins // 1440}d ago"
+
+
 def shell(tab, body, snap, q=""):
     rows = snap["rows"]
-    human, drafts, ev = sum(r["needs_human"] for r in rows), count(rows, "drafted"), 0
+    human, drafts = sum(r["needs_human"] for r in rows), count(rows, "drafted")
 
     def link(k, label, badge=None):
         b = f'<span class=badge>{badge}</span>' if badge else ""
         return f'<a href="/?p={k}" class="{"on" if tab == k else ""}">{label}{b}</a>'
 
-    when = f'Last run <b>{e(snap["generated"][:10])}</b>' if snap["generated"] else "No run yet"
+    runs = snap.get("runs") or []
+    chip = (f'<span class=chip><i></i>Run {len(runs)} <span>{runs[0]["drafted"]} drafted · {ago(runs[0]["ts"])}</span></span>' if runs else
+            f'<span class=chip><i></i>{("Last run " + e(snap["generated"][:10])) if snap["generated"] else "No run yet"}</span>')
     return ('<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">'
             f'<title>Outreach Agent</title><style>{CSS}</style><script>const NEEDPW={"true" if APP_PASSWORD else "false"};</script><div class=app><aside>'
             '<div class=brand><i></i><div>OUTREACH<small>AGENT</small></div></div>'
@@ -199,51 +229,71 @@ def shell(tab, body, snap, q=""):
             f'<h4>HUMAN GATES</h4>{link("review", "Review queue", human)}{link("drafts", "Drafts &amp; sends", drafts)}'
             f'<h4>LEARNING</h4>{link("feedback", "Feedback loop")}'
             '<div class=note>The model reads and writes. Python rules decide. Every draft waits for you.<br><br>Case study build, not affiliated with Sprinto.</div></aside>'
-            '<div><div class=top><form action="/"><input type=hidden name=p value=companies><input name=q placeholder="Search companies" value="'
-            f'{e(q)}"></form><span class=live>{when}</span><a class="btn p" href="/?p=run">Run pipeline</a></div>'
+            '<div><div class=top><form action="/"><input type=hidden name=p value=companies><input id=gq name=q placeholder="Search companies   Ctrl K" value="'
+            f'{e(q)}"></form>{chip}<button class=btn id=theme title="Light or dark" style="margin-left:auto">Theme</button>'
+            '<a class="btn p" href="/?p=run">Run pipeline</a></div>'
             f'<main>{body}</main></div></div><script>{JS}</script>')
 
 
-def overview(snap):
-    rows = snap["rows"]
+def overview(snap, run_id="all"):
+    all_rows, runs = snap["rows"], snap.get("runs") or []
+    rows = [r for r in all_rows if run_id == "all" or r.get("run", "earlier") == run_id]
     n = len(rows)
     fit = count(rows, "drafted", "no_contact", "no_hook")
     human = sum(r["needs_human"] for r in rows)
-    hl = snap["hunter_left"]
-    cards = [("Pool", n, "companies on the list", ""), ("Researched", n - count(rows, "failed"), "pages read", ""),
-             ("Qualified", fit, "fit score 70 or more", "hi"), ("Flagged", human, "waiting on a human", ""),
-             ("Dropped", count(rows, "disqualified", "not_qualified"), "a gate failed", ""),
-             ("Hunter left", "-" if hl is None else hl, "searches this month", "")]
-    cards_html = "".join(f'<div class="card {c}"><small>{a}</small><b>{b}</b><span>{d}</span></div>' for a, b, d, c in cards)
-    flow = "".join(f'<div class="step {"h" if h else ""}"><small><i></i>STEP {i}</small><b>{t}</b><p>{d}</p></div>' for i, (t, d, h) in enumerate(STEPS, 1))
-    stages = [("Researched", n - count(rows, "failed")), ("Passed the gates", n - count(rows, "failed", "disqualified", "manual_review")),
-              ("Fit score 70+", fit), ("Contact found", count(rows, "drafted", "no_hook")), ("Email drafted", count(rows, "drafted"))]
-    top = max(n, 1)
-    fun = "".join(f'<div><span>{l}</span><span class=bar><i style="width:{v * 100 // top}%"></i></span><b>{v}</b></div>' for l, v in stages)
-    return ('<div class=kicker>Latest run</div><h1>Pipeline overview</h1>'
+    hl, target = snap["hunter_left"], current_settings()["target"]
+    opts = '<option value="all">All companies</option>' + "".join(
+        f'<option value="{e(x["ts"])}" {"selected" if run_id == x["ts"] else ""}>Run {len(runs) - i} · {e(x["ts"][:10])}</option>' for i, x in enumerate(runs)) \
+        + f'<option value="earlier" {"selected" if run_id == "earlier" else ""}>Earlier (imported)</option>'
+    stats = [("Pool", len(all_rows), f'{snap.get("unseen", 0)} still unseen'), ("Researched", n - count(rows, "failed"), "pages read"),
+             ("Qualified", f'{fit} <em>/ {target}</em>', "fit score at or above the threshold"), ("Flagged", human, "waiting on a human"),
+             ("Dropped", count(rows, "disqualified", "not_qualified"), "a gate failed"),
+             ("Hunter left", "-" if hl is None else hl, "searches this month")]
+    stat_html = "".join(f"<div><small>{a}</small><b>{b}</b><span>{c}</span></div>" for a, b, c in stats)
+    sent = sum(x["kind"] == "edit" for x in db.events(500)) if db.enabled and not snap.get("db_error") else 0
+    counts = [n, n - count(rows, "failed"), n - count(rows, "failed"), n - count(rows, "failed", "disqualified", "manual_review"),
+              count(rows, "drafted", "no_hook"), count(rows, "drafted"), count(rows, "drafted"), count(rows, "drafted"), sent]
+    nodes = "".join(f'<div class="node {"h" if h else ""}"><div class=c>{i}</div><b>{t}</b><small>{d}</small><em>{c}</em></div>'
+                    for i, ((t, d, h), c) in enumerate(zip(STEPS, counts), 1))
+    dropped = {}
+    for r in rows:
+        if r["status"] in ("disqualified", "not_qualified"):
+            why = re.sub(r"runs on \w+", "runs on a competitor", r["reason"]) if r["status"] == "disqualified" else "fit score below the threshold"
+            dropped[why] = dropped.get(why, 0) + 1
+    drop_html = "".join(f'<div class=drop><span>{e(w)}<span class=bar style="display:block;margin-top:4px"><i style="width:{c * 100 // max(dropped.values())}%"></i></span></span><b>{c}</b></div>'
+                        for w, c in sorted(dropped.items(), key=lambda x: -x[1])) or "<small>Nothing dropped yet.</small>"
+    here = "".join(f'<tr class=l onclick="location=\'/?p=company&d={quote(r["domain"])}\'"><td><b>{e(r["domain"])}</b></td>'
+                   f'<td><span class="pill {STATUS[r["status"]][1]}">{STATUS[r["status"]][0]}</span></td><td>{"-" if r.get("score") is None else r["score"]}</td></tr>'
+                   for r in sorted(rows, key=lambda r: (r["status"] != "drafted", -(r.get("score") or 0)))[:10])
+    return (f'<div class=row><div><div class=kicker>Pipeline</div><h1>Pipeline overview</h1></div>'
+            f'<select class=runsel style="margin-left:auto" onchange="location=\'/?p=overview&run=\'+encodeURIComponent(this.value)">{opts}</select></div>'
             '<p class=sub>Funded SaaS companies, shortlisted by rules, researched in batches, qualified in Python and drafted automatically when nothing needs a human.</p>'
-            f'<div class=cards>{cards_html}</div>'
+            f'<div class=statgrid>{stat_html}</div>'
             f'<div class=box><span class=legend><i style="background:var(--blue)"></i>automatic<i style="background:var(--green)"></i>human gate</span>'
-            f'<h3>The case pipeline</h3><h2>Seven steps to an email in your inbox.</h2><div class=flow>{flow}</div></div>'
-            f'<div class=box><h3>Funnel</h3><h2>Where companies drop off.</h2><div class=fun>{fun}</div></div>')
+            f'<h3>The case pipeline</h3><h2>Seven steps from a domain to an email in your inbox.</h2><div class=nodes>{nodes}</div></div>'
+            f'<div class=grid2><div class=box><h3>Why companies dropped</h3>{drop_html}</div>'
+            f'<div class=box><h3>Companies in this view</h3><table>{here}</table><p><a class=back href="/?p=companies">All companies</a></p></div></div>')
 
 
 def companies(snap, flt, q):
     rows = snap["rows"]
-    groups = {"all": None, "drafted": ("drafted",), "human": ("manual_review", "failed", "no_contact", "no_hook"),
-              "dropped": ("disqualified", "not_qualified")}
-    chips = "".join(f'<a class="{"on" if flt == k else ""}" href="/?p=companies&f={k}">{k.title()}'
+    groups = {"all": None, "qualified": ("drafted", "no_contact", "no_hook"), "drafted": ("drafted",),
+              "flagged": ("manual_review", "failed", "no_contact", "no_hook"), "dropped": ("disqualified", "not_qualified")}
+    chips = "".join(f'<a class="{"on" if flt == k else ""}" href="/?p=companies&f={k}&q={quote(q)}">{k.title()}'
                     f' ({len(rows) if v is None else count(rows, *v)})</a>' for k, v in groups.items())
     keep = [r for r in rows if (groups.get(flt) is None or r["status"] in groups[flt])
-            and (not q or q.lower() in (r["domain"] + r["reason"]).lower())]
+            and (not q or q.lower() in (r["domain"] + r["reason"] + str(r.get("facts", {}).get("company_name", ""))).lower())]
     keep.sort(key=lambda r: (r["status"] != "drafted", -(r.get("score") or 0)))
     body = "".join(
-        f'<tr class=l onclick="location=\'/?p=company&d={quote(r["domain"])}\'"><td><a href="/?p=company&d={quote(r["domain"])}"><b>{e(r["domain"])}</b></a>'
-        f'<br><small>{e(r["reason"][:140])}</small></td><td><span class="pill {STATUS[r["status"]][1]}">{STATUS[r["status"]][0]}</span></td>'
-        f'<td>{"-" if r.get("score") is None else r["score"]}</td><td>{e(r["contact"]["name"]) if r.get("contact") else "-"}</td></tr>'
-        for r in keep) or '<tr><td colspan=4><small>Nothing matches.</small></td></tr>'
-    return (f'<div class=kicker>Companies</div><h1>Every company, with its reason.</h1><div class=chips style="margin-top:14px">{chips}</div>'
-            f'<div class=box style="margin-top:0"><table><tr><th>Company</th><th>Outcome</th><th>Fit</th><th>Contact</th></tr>{body}</table></div>')
+        f'<tr class=l onclick="location=\'/?p=company&d={quote(r["domain"])}\'"><td><a href="/?p=company&d={quote(r["domain"])}"><b>{e(str(r.get("facts", {}).get("company_name") or r["domain"].split(".")[0].title()))}</b></a>'
+        f'<br><small>{e(r["domain"])}</small></td><td>{e(str(r.get("facts", {}).get("funding_stage") or "-"))}</td>'
+        f'<td><span class="pill {STATUS[r["status"]][1]}">{STATUS[r["status"]][0]}</span></td>'
+        f'<td>{"-" if r.get("score") is None else r["score"]}</td><td><small>{e(r["reason"][:120])}</small></td></tr>'
+        for r in keep) or '<tr><td colspan=5><small>Nothing matches.</small></td></tr>'
+    return ('<div class=kicker>Pipeline</div><h1>Companies</h1><p class=sub>Every company the pipeline has researched. Open one to see each decision with its evidence.</p>'
+            f'<form action="/" class=row style="margin-bottom:10px"><input type=hidden name=p value=companies><input type=hidden name=f value="{e(flt)}">'
+            f'<input class=t name=q placeholder="Search name or domain" value="{e(q)}" style="max-width:320px;margin:0"><div class=chips style="margin:0">{chips}</div></form>'
+            f'<div class=box style="margin-top:0"><table><tr><th>Company</th><th>Stage</th><th>Outcome</th><th>Fit</th><th>Reason</th></tr>{body}</table></div>')
 
 
 def company(snap, domain):
@@ -399,26 +449,39 @@ def run_page(snap, demo):
                + f'</table><p><small>{st["companies"]} companies, {st["needs_human"]} for a human, '
                  f'{st["avg_fetches_beyond_homepage"]} extra page fetches each on average (cap 4).</small></p></div>')
     miss = live_missing()
+    steps = [("Read funding news and shortlist Series A-C SaaS with rules, or take your domains", ""), ("Crawl the homepage, trust and careers pages", ""),
+             ("Extract facts with verbatim quotes; Python checks every quote", ""), ("Qualify with rules; an agent loop fetches more pages for unknowns", ""),
+             ("Find the decision-maker with Hunter and title rules", ""), ("Write two pain points and a personalised email; code validates it", ""),
+             ("Drafts wait in Drafts and sends for your approval", "")]
+    what = "".join(f'<div class=q style="border:0;padding:0;display:flex;margin:10px 0"><span class=num>{i}</span><span>{e(t)}</span></div>' for i, (t, _) in enumerate(steps, 1))
     if miss:
         live = ('<div class=warnbox><b>Live runs are switched off.</b> Still needed: ' + e(", ".join(miss)) + '. '
                 'Add them in the Vercel project settings and redeploy.</div>')
+        left = ""
     else:
         try:
-            have = {r["domain"] for r in snap["rows"]}
-            waiting = sum(d not in have for d in db.shortlist())
             hist = "".join(f"<tr><td><small>{e(x['ts'][:16].replace('T', ' '))}</small></td><td>{x['n']} companies</td><td>{x['drafted']} drafted</td></tr>" for x in db.runs()) \
                 or "<tr><td colspan=3><small>No runs yet.</small></td></tr>"
         except Exception as ex:
-            waiting, hist = 0, f"<tr><td colspan=3><small>Database error: {e(str(ex)[:120])}</small></td></tr>"
-        live = (f'<div class=box><h3>Live run (real sites, Gemini and Hunter)</h3><p class=sub style="margin-bottom:8px">Up to {MAX_PER_RUN} companies per run, about 30 seconds each. '
-                'Each one that reaches the contact step spends one Hunter search.</p>'
-                '<textarea class="t dom" id=doms placeholder="One domain per line, e.g. example.com"></textarea>'
-                f'<div class=row><button class="btn g" id=go>Run these domains</button><button class=btn id=find>Find new companies</button>'
-                f'<button class=btn id=short>Run the next from the shortlist ({waiting} waiting)</button>'
-                f'<span class=ok-t id=status></span></div></div><div class=box><h3>Recent runs</h3><table>{hist}</table></div>')
-    return ('<div class=kicker>Run</div><h1>Run the pipeline</h1>'
-            '<p class=sub>Results land in Companies, Review queue and Drafts &amp; sends. Nothing is emailed from here.</p>'
-            f'{live}<p><a class="btn" href="/?p=run&demo=1">Run the offline demo</a></p>{out}')
+            hist = f"<tr><td colspan=3><small>Database error: {e(str(ex)[:120])}</small></td></tr>"
+        t = current_settings()["target"]
+        seg = "".join(f'<button class="{"on" if n == t and n <= 3 else ""}" data-n="{n}">{n}</button>' for n in (1, 2, 3))
+        live = ""
+        left = (f'<div class=box style="margin-top:0"><h2>Find companies for me</h2><p class=sub style="margin-bottom:12px">No input needed. It pulls fresh funding news, shortlists companies '
+                'that fit your ICP, and takes each one through research, contact and email until enough qualify. It also runs by itself every Monday.</p>'
+                f'<small class=kicker>Stop after this many qualify</small><div style="margin:6px 0 10px"><span class=seg>{seg}</span></div>'
+                f'<p><button class="btn p" id=auto>Find companies for me</button> <span class=ok-t id=status></span></p>'
+                f'<small>Each qualified company uses one Hunter search. Dropped companies cost nothing in Hunter. Up to {MAX_PER_RUN} companies are looked at per click.</small></div>'
+                '<div class=box><h3>Or run on specific domains</h3><textarea class="t dom" id=doms placeholder="One domain per line, e.g. example.com"></textarea>'
+                f'<div class=row><button class="btn g" id=go>Run these domains</button><button class=btn id=find>Refresh the shortlist</button>'
+                f'<button class=btn id=short>Run the next from the shortlist ({snap.get("unseen", 0)} unseen)</button></div></div>'
+                f'<div class=box><h3>Recent runs</h3><table>{hist}</table></div>')
+    return ('<div class=kicker>Pipeline</div><h1>Run the pipeline</h1>'
+            '<p class=sub>It finds recently funded companies on its own, researches and qualifies them, finds the right person and drafts a personalised email. '
+            'Only what the rules cannot settle comes back to you. Nothing is emailed from here.</p>'
+            f'{live}<div class=grid2 style="grid-template-columns:3fr 2fr;align-items:start"><div>{left}</div>'
+            f'<div class=box style="margin-top:0"><h3>What happens to each company</h3>{what}</div></div>'
+            f'<p><a class="btn" href="/?p=run&demo=1">Run the offline demo</a></p>{out}')
 
 
 def current_settings():
@@ -434,7 +497,7 @@ def current_settings():
     return s
 
 
-def settings_page(snap):
+def settings_page(snap):  # noqa: C901
     s = current_settings()
     editable = db.enabled and not snap.get("db_error")
     dis = "" if editable else "disabled"
@@ -448,7 +511,8 @@ def settings_page(snap):
             f'{note}<div class=grid2><div class=box style="margin-top:0"><h3>Qualifying</h3>'
             f'<label>Score needed to draft an email (0 to 100)</label>{num("s_threshold", s["threshold"], 0, 100)}'
             f'<label>Points taken off when the funding stage is unknown</label>{num("s_penalty", s["stage_penalty"], 0, 30)}'
-            f'<label>Funding stages in the ICP</label><div style="margin:6px 0 4px">{stages}</div></div>'
+            f'<label>Funding stages in the ICP</label><div style="margin:6px 0 4px">{stages}</div>'
+            f'<label>How many qualified companies a run aims for (1 to 5)</label>{num("s_target", s["target"], 1, 5)}</div>'
             f'<div class=box style="margin-top:0"><h3>How hard it looks (page fetches per question)</h3>'
             f'<label>Already certified? (trust and security pages, max 2)</label>{num("s_l_certified", lim["certified"], 0, 2)}'
             f'<label>B2B SaaS? (product and about pages, max 2)</label>{num("s_l_saas", lim["saas"], 0, 2)}'
@@ -484,17 +548,42 @@ def page(url):
         return shell("method", method(), snap)
     if tab == "run":
         return shell("run", run_page(snap, q.get("demo")), snap)
-    return shell("overview", overview(snap), snap)
+    return shell("overview", overview(snap, q.get("run", "all")), snap)
+
+
+def _limited():
+    """No password is set, so cap spend instead: MAX_RUNS_PER_HOUR runs an hour, for everyone."""
+    since = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat(timespec="seconds")
+    if sum(x["ts"] > since for x in db.runs(20)) >= MAX_RUNS_PER_HOUR:
+        return 429, {"error": f"Run limit reached ({MAX_RUNS_PER_HOUR} an hour). Try again later."}
+
+
+def _seeds():
+    sl = ROOT / "data/shortlist.json"
+    return {**(json.loads(sl.read_text(encoding="utf-8")) if sl.exists() else {}), **db.shortlist()}
+
+
+def _process(domains, seeds, given=None, stop_after=None):
+    """Run the pipeline on domains as one run. stop_after: stop once that many companies qualified."""
+    ts, lessons, rows = db.now(), db.learnings(), []
+    for d in domains:
+        r = run.process(d, str(ROOT / "data/contacts.csv"), False, seeds.get(d), lessons, given)
+        r["run"] = ts
+        r = run.public(r)
+        db.save_company(r)
+        rows.append(r)
+        if stop_after and count(rows, "drafted", "no_contact", "no_hook") >= stop_after:
+            break
+    drafted = count(rows, "drafted")
+    db.add_run(len(rows), drafted, ts)
+    return 200, {"note": f"Done: {len(rows)} companies looked at, {drafted} drafted."}
 
 
 def do_run(body):
     current_settings()
-    # no password is set, so cap spend instead: at most MAX_RUNS_PER_HOUR runs an hour, for everyone
-    since = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat(timespec="seconds")
-    if sum(x["ts"] > since for x in db.runs(20)) >= MAX_RUNS_PER_HOUR:
-        return 429, {"error": f"Run limit reached ({MAX_RUNS_PER_HOUR} an hour). Try again later."}
-    sl = ROOT / "data/shortlist.json"
-    seeds = {**(json.loads(sl.read_text(encoding="utf-8")) if sl.exists() else {}), **db.shortlist()}
+    if (err := _limited()):
+        return err
+    seeds = _seeds()
     if body.get("shortlist"):
         have = {r["domain"] for r in db.companies()}
         domains = [d for d in (db.shortlist() or seeds) if d not in have]
@@ -513,15 +602,28 @@ def do_run(body):
         if not name or not title:
             return 400, {"error": "Enter both a name and a title."}
         given = {"name": name, "title": title}
-    lessons = db.learnings()
-    rows = []
-    for d in domains:
-        r = run.public(run.process(d, str(ROOT / "data/contacts.csv"), False, seeds.get(d), lessons, given))
-        db.save_company(r)
-        rows.append(r)
-    drafted = count(rows, "drafted")
-    db.add_run(len(rows), drafted)
-    return 200, {"note": f"Done: {len(rows)} companies, {drafted} drafted."}
+    return _process(domains, seeds, given)
+
+
+def do_auto(body):
+    """Find companies for me: refresh the shortlist if nothing is waiting, then research until `target` qualify."""
+    s = current_settings()
+    if (err := _limited()):
+        return err
+    try:
+        target = max(1, min(5, int(body.get("target") or s["target"])))
+    except (TypeError, ValueError):
+        target = s["target"]
+    have = {r["domain"] for r in db.companies()}
+    waiting = [d for d in db.shortlist() if d not in have]
+    if not waiting:
+        found = shortlist.find(15)
+        if found:
+            db.save_shortlist(shortlist.seeds(found))
+        waiting = [d for d in found if d not in have]
+    if not waiting:
+        return 200, {"note": "No new funded companies found right now. Try again later or run specific domains."}
+    return _process(waiting[:MAX_PER_RUN], _seeds(), stop_after=target)
 
 
 def do_fb(body):
@@ -564,7 +666,7 @@ def do_settings(body):
     return 200, {"note": "Saved. The next run uses these settings."}
 
 
-ROUTES = {"settings": do_settings, "run": do_run, "fb": do_fb, "learn": do_learn, "shortlist": do_shortlist}
+ROUTES = {"auto": do_auto, "settings": do_settings, "run": do_run, "fb": do_fb, "learn": do_learn, "shortlist": do_shortlist}
 
 
 class handler(BaseHTTPRequestHandler):
@@ -576,6 +678,14 @@ class handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         try:
+            if parse_qs(urlparse(self.path).query).get("p") == ["cron"]:
+                secret = os.getenv("CRON_SECRET", "")
+                if not secret or not hmac.compare_digest(self.headers.get("Authorization", ""), f"Bearer {secret}"):
+                    return self._send(401, json.dumps({"error": "Not allowed."}), "application/json")
+                if not (db.enabled and config.API_KEY):
+                    return self._send(503, json.dumps({"error": "Database or Gemini key missing."}), "application/json")
+                code, out = do_auto({})
+                return self._send(code, json.dumps(out), "application/json")
             self._send(200, page(self.path))
         except Exception as ex:  # show the failure instead of a blank 500
             self._send(500, f"error: {ex}")
@@ -591,7 +701,7 @@ class handler(BaseHTTPRequestHandler):
                 code, out = 401, {"error": "Wrong or missing access password."}
             elif not db.enabled:
                 code, out = 503, {"error": "No database is connected."}
-            elif route in (do_run, do_learn) and not config.API_KEY:
+            elif route in (do_run, do_auto, do_learn) and not config.API_KEY:
                 code, out = 503, {"error": "GEMINI_API_KEY is not set."}
             else:
                 code, out = route(body)

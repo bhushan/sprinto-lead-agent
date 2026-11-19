@@ -28,6 +28,7 @@ DEFAULTS = {
                               "head of engineering", "director of engineering"],
               "founder": ["founder", "ceo", "chief executive"]},
     "sender": "Piyush",
+    "target": 3,
 }
 
 
@@ -70,6 +71,7 @@ def validate(raw):
     if not re.fullmatch(r"[A-Za-z .'-]{1,40}", sender):
         raise ValueError("Sender name: letters only, up to 40.")
     s["sender"] = sender
+    s["target"] = _int(raw.get("target", 3), 1, 5, "Qualified target")
     return s
 
 
