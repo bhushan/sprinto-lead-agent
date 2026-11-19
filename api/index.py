@@ -110,6 +110,8 @@ textarea.dom{min-height:110px}.row{display:flex;gap:8px;flex-wrap:wrap;align-ite
 .num{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--soft2);color:var(--blue);font-size:12px;font-weight:700;margin-right:10px}
 .runsel{padding:8px 12px;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--text);font:inherit}
 .drop{display:grid;grid-template-columns:1fr 40px;gap:10px;align-items:center;margin:8px 0;font-size:14px}
+.tier{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:8px;font-weight:700;font-size:12px}
+.tA{background:var(--green);color:#04281f}.tB{background:var(--blue);color:#fff}.tC{background:var(--soft2);color:var(--mute)}
 .warnbox{background:#fffaf0;border:1px solid #f6d49a;color:#7a4a05;border-radius:12px;padding:12px 14px;margin:14px 0;font-size:14px}
 @media(max-width:860px){.app{grid-template-columns:1fr}aside{position:static;height:auto}.grid2{grid-template-columns:1fr}.fun div{grid-template-columns:100px 1fr 30px}main{padding:18px}.top{padding:12px 18px}}
 """
@@ -152,7 +154,7 @@ let target=3;document.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>{
 go('#auto','auto',()=>({target}),'Finding companies, researching them and stopping when enough qualify. This takes up to 4 minutes, keep this tab open.');
 const chain=(sel,steps,wait)=>{const b=document.querySelector(sel);if(!b)return;b.onclick=async()=>{const m=document.querySelector('#status');b.disabled=true;m.textContent=wait;
   try{let j;for(const [p,d] of steps()){j=await post(p,d)}m.textContent=j.note||'Done';setTimeout(()=>location.reload(),700)}catch(x){m.textContent=x.message;b.disabled=false}}};
-const pf=()=>({keywords:document.querySelector('#p_kw').value,regions:['IN','US','GB','SG'].filter(c=>document.querySelector('#p_r_'+c).checked)});
+const pf=()=>({sources:['funding','hiring'].filter(c=>document.querySelector('#p_s_'+c).checked),keywords:document.querySelector('#p_kw').value,regions:['IN','US','GB','SG'].filter(c=>document.querySelector('#p_r_'+c).checked)});
 chain('#psearch',()=>[['prospects',pf()],['shortlist',{}]],'Saving, then searching Google News and checking homepages. About a minute, keep this tab open.');
 chain('#psave',()=>[['prospects',pf()]],'Saving...');
 chain('#padd',()=>[['adddomains',{domains:document.querySelector('#p_dom').value.split(/[\\s,]+/).filter(Boolean)}]],'Adding...');
@@ -164,7 +166,7 @@ go('#short','run',()=>({shortlist:true}),'Running the next companies from the sh
 const form=()=>{const v=id=>document.querySelector('#'+id).value,csv=id=>v(id);
   return {threshold:v('s_threshold'),stage_penalty:v('s_penalty'),stages:['A','B','C'].filter(x=>document.querySelector('#s_stage_'+x).checked),
    exclude:csv('s_exclude'),limits:{certified:v('s_l_certified'),saas:v('s_l_saas'),stage:v('s_l_stage')},
-   roles:{security:csv('s_r_security'),engineering:csv('s_r_engineering'),founder:csv('s_r_founder')},sender:v('s_sender'),target:v('s_target')}};
+   roles:{security:csv('s_r_security'),engineering:csv('s_r_engineering'),founder:csv('s_r_founder')},sender:v('s_sender'),target:v('s_target'),tier_a:v('s_tier_a')}};
 go('#savecfg','settings',()=>({settings:form()}),'Saving...');
 go('#resetcfg','settings',()=>({reset:true}),'Resetting to defaults...');
 go('#learn','learn',()=>({}),'Learning from your edits and ratings...');
@@ -210,6 +212,16 @@ def live_missing():
     """What is still needed before the browser can run the pipeline."""
     return [name for name, ok in (("DATABASE_URL (the Neon connection string)", db.enabled),
                                   ("GEMINI_API_KEY", bool(config.API_KEY))) if not ok]
+
+
+def tier_of(r):
+    """Tier from the current settings, so changing the thresholds re-tiers every company."""
+    return None if r["status"] in ("disqualified", "failed", "manual_review") else qualify.tier(r.get("score"))
+
+
+def tier_badge(r):
+    t = tier_of(r)
+    return f'<span class="tier t{t}" title="Tier {t}">{t}</span>' if t else "-"
 
 
 def count(rows, *st):
@@ -259,7 +271,7 @@ def overview(snap, run_id="all"):
         f'<option value="{e(x["ts"])}" {"selected" if run_id == x["ts"] else ""}>Run {len(runs) - i} · {e(x["ts"][:10])}</option>' for i, x in enumerate(runs)) \
         + f'<option value="earlier" {"selected" if run_id == "earlier" else ""}>Earlier (imported)</option>'
     stats = [("Pool", len(all_rows), f'{snap.get("unseen", 0)} still unseen'), ("Researched", n - count(rows, "failed"), "pages read"),
-             ("Qualified", f'{fit}' + (f' <em>/ {target}</em>' if run_id != "all" else ""), "fit score at or above the threshold"), ("Flagged", human, "waiting on a human"),
+             ("Qualified", f'{fit}' + (f' <em>/ {target}</em>' if run_id != "all" else ""), f'{sum(tier_of(r) == "A" for r in rows)} tier A · {sum(tier_of(r) == "B" for r in rows)} tier B · {sum(tier_of(r) == "C" for r in rows)} near miss'), ("Flagged", human, "waiting on a human"),
              ("Dropped", count(rows, "disqualified", "not_qualified"), "a gate failed"),
              ("Hunter left", "-" if hl is None else hl, "searches this month")]
     stat_html = "".join(f"<div><small>{a}</small><b>{b}</b><span>{c}</span></div>" for a, b, c in stats)
@@ -294,19 +306,22 @@ def companies(snap, flt, q):
               "flagged": ("manual_review", "failed", "no_contact", "no_hook"), "dropped": ("disqualified", "not_qualified")}
     chips = "".join(f'<a class="{"on" if flt == k else ""}" href="/?p=companies&f={k}&q={quote(q)}">{k.title()}'
                     f' ({len(rows) if v is None else count(rows, *v)})</a>' for k, v in groups.items())
-    keep = [r for r in rows if (groups.get(flt) is None or r["status"] in groups[flt])
+    tiers = {t: sum(tier_of(r) == t for r in rows) for t in "ABC"}
+    chips += "".join(f'<a class="{"on" if flt == "tier-" + t else ""}" href="/?p=companies&f=tier-{t}&q={quote(q)}">Tier {t} ({n})</a>' for t, n in tiers.items())
+    keep = [r for r in rows if (flt.startswith("tier-") and tier_of(r) == flt[-1])
+            or (not flt.startswith("tier-") and (groups.get(flt) is None or r["status"] in groups[flt]))
             and (not q or q.lower() in (r["domain"] + r["reason"] + str(r.get("facts", {}).get("company_name", ""))).lower())]
     keep.sort(key=lambda r: (r["status"] != "drafted", -(r.get("score") or 0)))
     body = "".join(
         f'<tr class=l onclick="location=\'/?p=company&d={quote(r["domain"])}\'"><td><a href="/?p=company&d={quote(r["domain"])}"><b>{e(str(r.get("facts", {}).get("company_name") or r["domain"].split(".")[0].title()))}</b></a>'
         f'<br><small>{e(r["domain"])}</small></td><td>{e(str(r.get("facts", {}).get("funding_stage") or "-"))}</td>'
         f'<td><span class="pill {STATUS[r["status"]][1]}">{STATUS[r["status"]][0]}</span></td>'
-        f'<td>{"-" if r.get("score") is None else r["score"]}</td><td><small>{e(r["reason"][:120])}</small></td></tr>'
-        for r in keep) or '<tr><td colspan=5><small>Nothing matches.</small></td></tr>'
+        f'<td>{tier_badge(r)}</td><td>{"-" if r.get("score") is None else r["score"]}</td><td><small>{e(r["reason"][:120])}</small></td></tr>'
+        for r in keep) or '<tr><td colspan=6><small>Nothing matches.</small></td></tr>'
     return ('<div class=kicker>Pipeline</div><h1>Companies</h1><p class=sub>Every company the pipeline has researched. Open one to see each decision with its evidence.</p>'
             f'<form action="/" class=row style="margin-bottom:10px"><input type=hidden name=p value=companies><input type=hidden name=f value="{e(flt)}">'
             f'<input class=t name=q placeholder="Search name or domain" value="{e(q)}" style="max-width:320px;margin:0"><div class=chips style="margin:0">{chips}</div></form>'
-            f'<div class=box style="margin-top:0"><table><tr><th>Company</th><th>Stage</th><th>Outcome</th><th>Fit</th><th>Reason</th></tr>{body}</table></div>')
+            f'<div class=box style="margin-top:0"><table><tr><th>Company</th><th>Stage</th><th>Outcome</th><th>Tier</th><th>Fit</th><th>Reason</th></tr>{body}</table></div>')
 
 
 def company(snap, domain):
@@ -331,7 +346,7 @@ def company(snap, domain):
     elif r.get("needs_human"):
         extra = f'<div class=box><h3>What a human should do</h3>{e(TODO.get(r["status"], ""))}</div>'
     return (f'<a class=back href="/?p=companies">Back to companies</a><h1>{e(r["domain"])}</h1>'
-            f'<span class="pill {cls}">{lab}</span> <small>fit {"-" if r.get("score") is None else r["score"]}</small>'
+            f'<span class="pill {cls}">{lab}</span> {tier_badge(r) if tier_of(r) else ""} <small>fit {"-" if r.get("score") is None else r["score"]}</small>'
             f'<p class=sub style="margin-top:10px">{e(r["reason"])}</p>'
             f'<div class=grid2><div class=box style="margin-top:0"><h3>Evidence map</h3>{ev}{flags}</div>'
             f'<div class=box style="margin-top:0"><h3>Facts extracted</h3><table>{facts}</table></div></div>{extra}')
@@ -362,7 +377,7 @@ def drafts(snap):
     rows = [r for r in snap["rows"] if r.get("body")]
     warn = lambda r: "".join(f'<div class=warnbox style="margin:8px 0">{e(x)}</div>' for x in r.get("flags", []) if x.startswith("Check before sending"))
     cards = "".join(
-        f'<div class="box draft" data-d="{e(r["domain"])}" data-hook="{e(r["hook"][:200])}"><div class=row><b>{e(r["contact"]["name"])}</b><small>{e(r["contact"]["title"])} at {e(r["domain"])}</small>'
+        f'<div class="box draft" data-d="{e(r["domain"])}" data-hook="{e(r["hook"][:200])}"><div class=row><b>{e(r["contact"]["name"])}</b>{tier_badge(r) if tier_of(r) else ""}<small>{e(r["contact"]["title"])} at {e(r["domain"])}</small>'
         f'<a class=btn style="margin-left:auto" href="/?p=company&d={quote(r["domain"])}">Why this email</a></div>'
         f'<small>Hook: {e(r["hook"])}</small>{warn(r)}'
         f'<input class="t sub-in" value="{e(r["subject"])}"><textarea class="t body-in">{e(r["body"])}</textarea>'
@@ -529,6 +544,7 @@ def settings_page(snap):  # noqa: C901
             f'{note}<div class=grid2><div class=box style="margin-top:0"><h3>Qualifying</h3>'
             f'<label>Score needed to draft an email (0 to 100)</label>{num("s_threshold", s["threshold"], 0, 100)}'
             f'<label>Points taken off when the funding stage is unknown</label>{num("s_penalty", s["stage_penalty"], 0, 30)}'
+            f'<label>Score for tier A (at or above it is tier A; the score above is tier B; 15 below it is tier C, a near miss that is not emailed)</label>{num("s_tier_a", s["tier_a"], 0, 100)}'
             f'<label>Funding stages in the ICP</label><div style="margin:6px 0 4px">{stages}</div>'
             f'<label>How many qualified companies a run aims for (1 to 5)</label>{num("s_target", s["target"], 1, 5)}</div>'
             f'<div class=box style="margin-top:0"><h3>How hard it looks (page fetches per question)</h3>'
@@ -557,19 +573,22 @@ def prospects_page(snap):
         sl = {}
     regions = "".join(f'<label style="margin-right:14px"><input type=checkbox id=p_r_{c} {"checked" if c in s["regions"] else ""} {dis}> {n}</label>'
                       for c, n in (("IN", "India"), ("US", "United States"), ("GB", "United Kingdom"), ("SG", "Singapore")))
+    sources = "".join(f'<label style="margin-right:14px"><input type=checkbox id=p_s_{c} {"checked" if c in s["sources"] else ""} {dis}> {n}</label>'
+                      for c, n in (("funding", "Funding news"), ("hiring", "Security and compliance hires")))
     rows = "".join(
-        f'<tr><td><b>{e(d)}</b></td><td>{e(v.get("funding_stage") or "added by you")}</td><td><small>{e((v.get("funding_source") or "")[:90])}</small></td>'
+        f'<tr><td><b>{e(d)}</b></td><td>{e(v.get("funding_stage") or ("hiring" if v.get("hiring_source") else "added by you"))}</td><td><small>{e((v.get("funding_source") or v.get("hiring_source") or "")[:90])}</small></td>'
         f'<td><span class="pill {"mute" if d in have else "ok"}">{"Researched" if d in have else "Waiting"}</span></td></tr>' for d, v in list(sl.items())[-60:]) \
         or "<tr><td colspan=4><small>Nothing here yet. Search, or add your own domains.</small></td></tr>"
     note = "" if editable else '<div class=warnbox>A database is needed to save prospects. Showing a read-only view.</div>'
     return ('<div class=kicker>Pipeline</div><h1>Prospects</h1>'
-            '<p class=sub>Tell it where to look. It searches funding news for companies matching your keywords, checks each one has a real website, and queues them. '
+            '<p class=sub>Tell it where to look. It searches funding news and security or compliance hiring news for companies matching your keywords, checks each one has a real website, and queues them. '
             'Run the queue from the Run page, or let the Monday run pick them up.</p>' + note +
             f'<div class=grid2><div class=box style="margin-top:0"><h3>Search for prospects</h3>'
             f'<label>Industries or topics to look for (comma separated, up to 5)</label>'
             f'<textarea class=t id=p_kw style="min-height:70px" placeholder="e.g. cybersecurity, healthtech, HR tech, payments" {dis}>{e(", ".join(s["keywords"]))}</textarea>'
             f'<small>Leave empty to use the built-in SaaS search. Funding stages come from ICP settings ({e(", ".join("Series " + x for x in s["stages"]))}).</small>'
             f'<label>Regions</label><div style="margin:6px 0 10px">{regions}</div>'
+            f'<label>Where to look</label><div style="margin:6px 0 10px">{sources}</div>'
             f'<div class=row><button class="btn g" id=psearch {dis}>Save and search now</button><button class=btn id=psave {dis}>Save only</button></div></div>'
             f'<div class=box style="margin-top:0"><h3>Add your own companies</h3>'
             f'<label>Websites you already have in mind, one per line</label>'
@@ -742,7 +761,7 @@ def do_settings(body):
         if not isinstance(cfg, dict):
             return 400, {"error": "Bad settings."}
         stored = settings.effective(db.get_settings())  # the form does not carry the prospect search fields
-        db.set_settings(settings.validate({"keywords": stored["keywords"], "regions": stored["regions"], **cfg}))
+        db.set_settings(settings.validate({"keywords": stored["keywords"], "regions": stored["regions"], "sources": stored["sources"], **cfg}))
     except ValueError as ex:
         return 400, {"error": str(ex)}
     return 200, {"note": "Saved. The next run uses these settings."}
@@ -751,7 +770,8 @@ def do_settings(body):
 def do_prospects(body):
     try:
         db.set_settings(settings.validate({**settings.effective(db.get_settings()),
-                                           "keywords": body.get("keywords", ""), "regions": body.get("regions") or []}))
+                                           "keywords": body.get("keywords", ""), "regions": body.get("regions") or [],
+                                           "sources": body.get("sources", settings.effective(db.get_settings())["sources"])}))
     except ValueError as ex:
         return 400, {"error": str(ex)}
     return 200, {"note": "Saved. The next search and the Monday run use these."}

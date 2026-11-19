@@ -37,7 +37,7 @@ def pick_hook(facts):
     sigs = facts.get("compliance_signals") or []
     if sigs:
         return max(sigs, key=lambda s: sum(w in s.lower() for w in HOOK_WORDS))
-    return facts.get("funding_source")
+    return facts.get("hiring_source") or facts.get("funding_source")
 
 
 def check(mail, contact, name, sources):

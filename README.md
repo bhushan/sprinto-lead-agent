@@ -120,3 +120,13 @@ companies still use Hunter. Emails are stored but never rendered on the site.
 - **Send from the site:** set `TO_ADDRESS` (your own address) and `GMAIL_APP_PASSWORD` (a Google app password, needs
   2-step verification) as Vercel environment variables. "Approve & send" then emails the draft to your own inbox,
   never to the prospect, at most 10 a day, and shows only a masked address. Without them the button opens your mail app.
+
+## Discovery sources and tiers
+
+- **Two discovery sources**, switchable on the Prospects page: funding news (a recent Series A-C round) and hiring news
+  (a security or compliance hire, such as a CISO or head of compliance, in the last 180 days). A company found by
+  hiring news carries the headline as evidence, and it becomes the email hook when the site gives no better one.
+  Hiring stories are rare in news search, so expect a few leads per search, not dozens.
+- **Tiers:** A at the "tier A" score (default 85) or above, B from the qualifying score (default 70), C for a near miss
+  within 15 points below it. Only A and B get an email. Tiers are computed from the current settings, so changing
+  a threshold re-tiers every company. Companies and Drafts show the tier; Companies can filter by it.

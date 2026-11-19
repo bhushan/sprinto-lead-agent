@@ -22,6 +22,20 @@ GAPS: {flags}"""
 STAGES_TEXT = "Series A, Series B, Series C"  # set from settings
 
 
+NEAR_MISS = 15  # tier C: a score this close below the threshold is worth a second look, not an email
+
+
+def tier(score):
+    """A at or above config.TIER_A, B at or above the qualifying score, C within NEAR_MISS below it, else None."""
+    if score is None:
+        return None
+    if score >= config.TIER_A:
+        return "A"
+    if score >= config.QUALIFY_THRESHOLD:
+        return "B"
+    return "C" if score >= config.QUALIFY_THRESHOLD - NEAR_MISS else None
+
+
 def _stage_known(f):
     return bool(f.get("funding_stage")) or (f.get("open_roles") or 0) >= 5 or bool(f.get("enterprise_tier"))
 

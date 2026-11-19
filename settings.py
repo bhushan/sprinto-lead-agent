@@ -31,6 +31,8 @@ DEFAULTS = {
     "target": 3,
     "keywords": [],
     "regions": ["IN", "US"],
+    "tier_a": 85,
+    "sources": ["funding", "hiring"],
 }
 
 
@@ -74,6 +76,12 @@ def validate(raw):
         raise ValueError("Sender name: letters only, up to 40.")
     s["sender"] = sender
     s["target"] = _int(raw.get("target", 3), 1, 5, "Qualified target")
+    s["tier_a"] = _int(raw.get("tier_a", DEFAULTS["tier_a"]), 0, 100, "Tier A score")
+    s["tier_a"] = max(s["tier_a"], s["threshold"])  # tier A can never sit below the qualifying score
+    sources = sorted({x for x in (raw.get("sources", DEFAULTS["sources"]) or []) if x in ("funding", "hiring")})
+    if not sources:
+        raise ValueError("Pick at least one discovery source.")
+    s["sources"] = sources
     s["keywords"] = _words(raw.get("keywords", DEFAULTS["keywords"]), 5, "Search keywords")
     regions = sorted({c for c in (raw.get("regions", DEFAULTS["regions"]) or []) if c in shortlist.REGION_TABLE})
     if not regions:
@@ -95,6 +103,7 @@ def apply(s):
     """Push settings into the pipeline modules. ponytail: module globals, so concurrent requests share the last applied settings."""
     s = effective(s)
     config.QUALIFY_THRESHOLD, config.STAGE_UNKNOWN_PENALTY, config.SENDER_NAME = s["threshold"], s["stage_penalty"], s["sender"]
+    config.TIER_A, shortlist.SOURCES = s["tier_a"], s["sources"]
     for q, k in zip(qualify.QUESTIONS, QKEYS):
         q["limit"] = min(s["limits"][k], len(q["paths"]))
     qualify.STAGES_TEXT = ", ".join("Series " + x for x in s["stages"])

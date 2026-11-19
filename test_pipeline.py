@@ -92,4 +92,20 @@ cfg.TO_ADDRESS = "someone@example.com"
 assert not mail_out.can_send()
 smtplib.SMTP_SSL, cfg.TO_ADDRESS = real_ssl, real_to
 os.environ.pop("GMAIL_APP_PASSWORD")
+import qualify  # tiers: A at 85+, B at the qualifying score, C within 15 below, nothing under that
+settings.apply(settings.DEFAULTS)
+assert [qualify.tier(x) for x in (None, 90, 85, 84, 70, 69, 55, 54, 0)] == [None, "A", "A", "B", "B", "C", "C", None, None]
+assert run.process("finlytic.example")["tier"] == "A" and run.process("cartwheel.example")["tier"] == "B"
+assert settings.validate({**settings.DEFAULTS, "tier_a": 60})["tier_a"] == 70  # clamped up to the threshold
+try:
+    settings.validate({**settings.DEFAULTS, "sources": []}); raise SystemExit("no source was accepted")
+except ValueError:
+    pass
+settings.apply(settings.validate({**settings.DEFAULTS, "sources": ["hiring"]}))
+assert shortlist.SOURCES == ["hiring"]
+settings.apply(settings.DEFAULTS)
+assert drafts.pick_hook({"hiring_source": "Acme names a CISO", "funding_source": "Acme raises"}) == "Acme names a CISO"
+assert shortlist.HIRE_NAME.match("Serval Acquires Ensignia and Names Sam Stewart Head of Security").group(1) == "Serval"
+assert shortlist.HIRE_NAME.match("Cognition taps Alex Stamos to head up security efforts - Axios").group(1) == "Cognition"
+assert shortlist.ROLE.search("Starburst Appoints Paras Malhotra as Chief Information Security Officer") and not shortlist.ROLE.search("Acme names new CEO")
 print("ok")

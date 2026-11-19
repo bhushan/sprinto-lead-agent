@@ -9,6 +9,7 @@ HUNTER_API_KEY = os.getenv("HUNTER_API_KEY", "")  # Option A for step 4; empty =
 MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 TEMPERATURE = 0.3
 
+TIER_A = 85              # score at or above this is tier A; the qualifying score is tier B
 QUALIFY_THRESHOLD = 70      # minimum ICP fit (0-100, same scale as the score) to email
 STAGE_UNKNOWN_PENALTY = 10  # Evidence Map: unanswered stage = "qualify at lower rank, flagged"
 TO_ADDRESS = os.getenv("TO_ADDRESS", "growth.lead@example.com")  # case rule: all mail goes to your own inbox
