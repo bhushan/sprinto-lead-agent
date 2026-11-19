@@ -17,15 +17,19 @@ Under 90 words, one soft ask for a short call. No greeting filler, no hype, no i
 {lessons}Return JSON: subject, body."""
 
 
+def company(domain, facts):
+    return facts.get("company_name") or domain.split(".")[0].title()
+
+
 def pain_points(domain, facts, contact):
-    p = PAIN_PROMPT.format(name=contact["name"], title=contact["title"], company=domain,
+    p = PAIN_PROMPT.format(name=contact["name"], title=contact["title"], company=company(domain, facts),
                            product=facts.get("product"), facts=facts)
     return llm.ask("pain_points", domain, p)["pain_points"]
 
 
 def draft(domain, facts, contact, pains, hook, lessons=None):
     p = DRAFT_PROMPT.format(sender=config.SENDER_NAME, name=contact["name"], title=contact["title"],
-                            company=domain, hook=hook, pains=[x["pain"] for x in pains],
+                            company=company(domain, facts), hook=hook, pains=[x["pain"] for x in pains],
                             lessons=("Follow these preferences the reviewer showed in past edits:\n- " + "\n- ".join(lessons) + "\n") if lessons else "")
     mail = llm.ask("draft", domain, p)
     if not mail["body"].rstrip().endswith(config.SENDER_NAME):  # the model sometimes drops the sign-off

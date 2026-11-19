@@ -28,4 +28,7 @@ db.add_event("finlytic.example", "rating", {"value": 1})
 assert db.events()[0]["data"] == {"value": 1}
 db.set_learnings(["a", "b"]); db.set_learnings(["c"])
 assert db.learnings() == ["c"]
+assert run.process("finlytic.example")["facts"]["company_name"] == "Finlytic"
+import drafts
+assert drafts.company("hyphenate.ai", {}) == "Hyphenate"
 print("ok")

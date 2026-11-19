@@ -1,9 +1,10 @@
 import llm
 
-FIELDS = ("rejected_quotes", "product", "buyer", "is_saas", "certifications", "funding_stage",
+FIELDS = ("rejected_quotes", "company_name", "product", "buyer", "is_saas", "certifications", "funding_stage",
           "headcount", "open_roles", "enterprise_tier", "compliance_signals")
 
 PROMPT = """Extract facts from this company web page as JSON with exactly these keys:
+company_name (the company's own name as its page writes it, e.g. "Gridcog"; never the web address),
 product (one line), buyer (who buys it, e.g. "logistics teams"), is_saas (bool: a software
 product sold on subscription to businesses), certifications (security certifications the
 company says it HOLDS, e.g. "SOC 2 Type II"; not ones it is working toward), funding_stage,

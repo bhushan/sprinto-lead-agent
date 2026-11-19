@@ -13,7 +13,8 @@
     "compliance_signals": [
      "Our enterprise customers now ask for SOC 2 Type II reports before signing",
      "we have begun our audit readiness programme"
-    ]
+    ],
+    "company_name": "Finlytic"
    },
    "security": {
     "product": null,
@@ -42,7 +43,8 @@
     "compliance_signals": [
      "Large retail customers have asked us for ISO 27001 certification as part of procurement",
      "we are looking for a way to get certified quickly"
-    ]
+    ],
+    "company_name": "Cartwheel"
    },
    "careers": {
     "product": null,
@@ -69,7 +71,8 @@
     "compliance_signals": [
      "buyers require GDPR and SOC 2 evidence",
      "our current audit prep is manual and slow"
-    ]
+    ],
+    "company_name": "Zenstack"
    }
   },
   "orbitdocs.example": {
@@ -82,7 +85,8 @@
     "headcount": 8,
     "open_roles": null,
     "enterprise_tier": null,
-    "compliance_signals": []
+    "compliance_signals": [],
+    "company_name": "OrbitDocs"
    }
   },
   "brickbox.example": {
@@ -95,7 +99,8 @@
     "headcount": 85,
     "open_roles": null,
     "enterprise_tier": null,
-    "compliance_signals": []
+    "compliance_signals": [],
+    "company_name": "BrickBox"
    }
   },
   "vaultly.example": {
@@ -111,7 +116,8 @@
     "headcount": 150,
     "open_roles": null,
     "enterprise_tier": null,
-    "compliance_signals": []
+    "compliance_signals": [],
+    "company_name": "Vaultly"
    }
   },
   "mistline.example": {
@@ -137,7 +143,8 @@
     "headcount": 90,
     "open_roles": null,
     "enterprise_tier": null,
-    "compliance_signals": []
+    "compliance_signals": [],
+    "company_name": "Trustco"
    },
    "security": {
     "product": null,

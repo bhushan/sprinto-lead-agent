@@ -1049,13 +1049,14 @@
    "fetches": 1,
    "score": 90,
    "facts": {
-    "funding_stage": "Series A",
+    "funding_stage": "$1M funding round from private investors",
     "funding_source": "Optio raises $1M Series A to launch SaaS and expand abroad - Dealroom",
     "funding_url": "https://news.google.com/rss/articles/CBMilgFBVV95cUxQUlRuNTVkUy1tZE8wNENLa2d4QjRPSVAzUWZEMlM1UlU4UFBKaHpLY3NmMkRxQl9lRWRoSzJaVVNWT0p5WjlNbThCZWhuWW96MURDR3BtcjhIM1p1N054ZE5MYWpiNTVleUp3NTZ5WHkySUw0bjBvZEpFdzE0TlpLeXhZcEx0bDZIQ2hMR2FELXJVMFpCa3c?oc=5",
     "funding_date": "2026-09-17",
     "rejected_quotes": 0,
-    "product": "Customer Engagement Platform",
-    "buyer": "banks and insurance companies",
+    "company_name": "Optio",
+    "product": "One platform to launch, automate, and track every campaign, built on the customer data you already have",
+    "buyer": "ადგილობრივი ბანკები და სადაზღვევო კომპანიები",
     "is_saas": true,
     "certifications": [],
     "open_roles": 2,
@@ -1090,21 +1091,21 @@
    },
    "pain_points": [
     {
-     "pain": "Meeting stringent security, privacy, and regulatory compliance standards required to sell to enterprise financial institutions without having existing formal certifications.",
-     "evidence": "The primary buyers are banks and insurance companies, but the company currently has no recorded certifications or compliance signals."
+     "pain": "Architecting and scaling the platform technology to transition into a SaaS model while expanding into foreign markets.",
+     "evidence": "Optio raised a $1M Series A funding round to launch SaaS and expand abroad."
     },
     {
-     "pain": "Scaling technical infrastructure and platform reliability to successfully transition to a SaaS model while expanding into international markets.",
-     "evidence": "The company raised a $1M Series A round specifically to launch SaaS and expand abroad."
+     "pain": "Satisfying strict enterprise security and data privacy requirements for financial industry buyers without formal compliance certifications in place.",
+     "evidence": "Optio sells to local banks and insurance companies ('ადგილობრივი ბანკები და სადაზღვევო კომპანიები'), yet 'certifications' and 'compliance_signals' are currently empty."
     }
    ],
    "hook": "Optio raises $1M Series A to launch SaaS and expand abroad - Dealroom",
-   "subject": "Optio's SaaS expansion and compliance",
-   "body": "Hi David,\n\nCongrats on Optio's recent $1M Series A to launch your SaaS platform and expand internationally.\n\nAs you scale your technical infrastructure to serve enterprise financial institutions, meeting stringent security, privacy, and regulatory standards without existing formal certifications can create friction. Sprinto addresses this by mapping one set of controls across SOC 2, ISO 27001, and GDPR.\n\nOpen to a short call next week to see if this aligns with your roadmap?\n\nBest,\nPiyush",
+   "subject": "Optio's SaaS expansion & enterprise security",
+   "body": "David,\n\nCongrats on Optio's recent $1M Series A to launch your SaaS platform and expand internationally.\n\nAs you architect and scale the technology for foreign markets, satisfying strict enterprise security and data privacy requirements for financial industry buyers can be tough without formal compliance certifications in place.\n\nSprinto maps one set of controls across SOC 2, ISO 27001, and GDPR to streamline this process.\n\nOpen to a short call next week?\n\nPiyush",
    "send": "drafted to outbox/ (not sent)",
    "status": "drafted",
-   "reason": "Optio is a B2B SaaS company at Series A selling to enterprise financial institutions, making it a strong fit for Sprinto as it likely faces customer pressure to get certified without having listed existing certifications.",
-   "seconds": 48.98
+   "reason": "Optio is a Series A B2B SaaS company selling to enterprise financial institutions without existing certifications listed, making them a strong fit for Sprinto's compliance automation.",
+   "seconds": 44.69
   },
   {
    "domain": "sparrow.com",
@@ -1186,13 +1187,14 @@
     "Already certified? unanswered: treat as not certified, flag"
    ],
    "fetches": 1,
-   "score": 85,
+   "score": 90,
    "facts": {
     "funding_stage": "Series A",
     "funding_source": "Gridcog raises $8.3M Series A to expand SaaS energy platform - SaasRise",
     "funding_url": "https://news.google.com/rss/articles/CBMisgFBVV95cUxPRGFjOTN1Y2ozVl82d2V4V2xvd2JBR1V2TlViQzVqa2hHRGRxLWdvT0dJcVhMMjJOZUdoemxZOVRvNFkyUEthanZIQjJvNndsWTdNUzJINUJhdkJmVXpEenhOM3hZNnpvOUp0eGt4S2V4aU1DMkdtMC1seXo3NWh5clczcXhjcTlLOHBJU3RLNmFRWDBlLXpIcWQ5elhZeVVENGhpQ19aT3FYcjAwc1Vvb013?oc=5",
     "funding_date": "2026-07-10",
     "rejected_quotes": 0,
+    "company_name": "Gridcog",
     "product": "Energy modelling software for your energy transition projects",
     "buyer": "energy transition players",
     "certifications": [],
@@ -1227,21 +1229,21 @@
    },
    "pain_points": [
     {
-     "pain": "Scaling technical infrastructure and engineering team capabilities to support rapid platform expansion following a major investment.",
-     "evidence": "Gridcog raised an $8.3M Series A round to expand its SaaS energy platform."
+     "pain": "Scaling technical infrastructure and engineering teams to support rapid platform expansion and user growth following fresh capital infusion.",
+     "evidence": "Gridcog raised an $8.3M Series A round specifically dedicated to expanding its SaaS energy platform."
     },
     {
-     "pain": "Developing and maintaining complex, high-performance simulation and modeling tools tailored to the diverse needs of energy transition clients.",
-     "evidence": "Gridcog's core product is energy modelling software designed specifically for energy transition projects and players."
+     "pain": "Handling complex domain data and maintaining high precision in modeling capabilities to meet the demanding requirements of energy sector clients.",
+     "evidence": "Gridcog provides specialized energy modelling software tailored for energy transition players and complex transition projects."
     }
    ],
    "hook": "Gridcog raises $8.3M Series A to expand SaaS energy platform - SaasRise",
-   "subject": "Gridcog's Series A and security compliance",
-   "body": "Matt,\n\nCongrats on Gridcog's recent $8.3M Series A to expand your SaaS energy platform.\n\nAs you scale your engineering team and infrastructure to support complex simulation tools for energy transition clients, security compliance can easily divert dev resources. Sprinto maps one set of controls across SOC 2, ISO 27001, and GDPR, keeping your team focused on core platform growth.\n\nOpen to a short call to see if this fits your current roadmap?\n\nBest,\nPiyush",
+   "subject": "Compliance automation for Gridcog",
+   "body": "Hi Matt,\n\nCongrats on Gridcog's recent $8.3M Series A to scale your SaaS energy platform.\n\nAs you expand your technical infrastructure and engineering team while maintaining high precision in your energy modeling, compliance prep can quickly become a distraction.\n\nSprinto automates evidence collection through integrations, keeping your technical teams focused on core platform development.\n\nOpen to a short call next week to see how this fits your roadmap?\n\nBest,\nPiyush",
    "send": "drafted to outbox/ (not sent)",
    "status": "drafted",
-   "reason": "Gridcog is a strong ICP fit as a Series A B2B SaaS company offering energy modelling software, although it currently lacks explicit compliance signals or listed certifications.",
-   "seconds": 32.39
+   "reason": "Gridcog scores 90 for ICP fit because it is a Series A B2B SaaS company offering an energy modelling software platform to enterprise energy transition players, perfectly matching Sprinto's target stage and profile, though specific compliance pressure signals remain unconfirmed.",
+   "seconds": 29.63
   },
   {
    "domain": "lexroom.com",
