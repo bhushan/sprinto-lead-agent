@@ -2,6 +2,7 @@
 
 Shows data/snapshot.json (the last live run). "Run demo" executes the pipeline offline on the
 bundled fictional fixtures: OFFLINE is forced, so it never touches the network or sends mail.
+Draft edits and "resolved" marks live in the viewer's browser (localStorage), not on the server.
 """
 import json
 import os
@@ -26,42 +27,75 @@ STATUS = {  # label, css class
     "disqualified": ("Disqualified", "mute"), "manual_review": ("Needs a human", "warn"),
     "failed": ("Needs a human", "warn"), "no_contact": ("Needs a human", "warn"), "no_hook": ("Needs a human", "warn"),
 }
-STEPS = [("Shortlist", "Funded SaaS from Google News, stage from the headline"), ("Scrape", "One cached, robots-aware fetch per page"), ("Extract", "Named fields; quotes must appear on the page"),
-         ("Qualify", "Evidence Map loop, max 4 extra fetches"), ("Find contact", "Hunter.io, ranked by who owns security"),
-         ("Pain points", "Two, each backed by a quote"), ("Draft", "By name, with a specific hook"),
-         ("Send", "You approve, mail goes to you only")]
+TODO = {  # what the human should do for each hand-over
+    "manual_review": "Open the site and decide if it is a B2B SaaS company. If yes, add it to your list and re-run.",
+    "failed": "The homepage could not be read. Check the site by hand, or try the domain again later.",
+    "no_contact": "Hunter found nobody who owns security or engineering. Look the right person up in Apollo and add them to data/contacts.csv.",
+    "no_hook": "Nothing specific to open with. Write the first line yourself.",
+}
+STEPS = [("Shortlist", "Funded SaaS from Google News", 0), ("Scrape", "One cached, robots-aware fetch", 0),
+         ("Extract", "Named fields, quotes verified", 0), ("Qualify", "Evidence Map loop, 4 fetches max", 0),
+         ("Find contact", "Hunter.io, ranked by role", 0), ("Pain points", "Two, each with a quote", 0),
+         ("Draft", "By name, with a specific hook", 0), ("Review", "A human approves", 1), ("Send", "To your inbox only", 1)]
 
 CSS = """
-:root{--bg:#09090b;--panel:#111114;--line:#232328;--text:#f4f4f5;--mute:#9a9aa3;--accent:#7c83ff;--ok:#34d399;--warn:#fbbf24;--g:linear-gradient(90deg,#4f8cff,#a78bfa)}
-@media(prefers-color-scheme:light){:root{--bg:#fafafa;--panel:#fff;--line:#e4e4e7;--text:#18181b;--mute:#6b6b75;--accent:#5b61e8;--ok:#059669;--warn:#b45309}}
+:root{--navy:#0b2545;--navy2:#13315c;--blue:#2563eb;--green:#10b981;--green-d:#047857;--bg:#f3f7fb;--panel:#fff;--line:#dfe7f1;--text:#0f1d33;--mute:#62748e}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.55 Inter,system-ui,-apple-system,Segoe UI,sans-serif}
-a{color:inherit;text-decoration:none}.wrap{max-width:1040px;margin:0 auto;padding:0 20px}
-header{border-bottom:1px solid var(--line);position:sticky;top:0;background:color-mix(in srgb,var(--bg) 85%,transparent);backdrop-filter:blur(8px);z-index:5}
-header .wrap{display:flex;align-items:center;justify-content:space-between;height:56px}
-.brand{display:flex;gap:10px;align-items:center;font-weight:600}.brand i{width:20px;height:20px;border-radius:6px;background:var(--g)}
-nav{display:flex;gap:4px}nav a{padding:6px 12px;border-radius:8px;color:var(--mute);font-size:14px}nav a.on,nav a:hover{background:var(--panel);color:var(--text)}
-.hero{padding:72px 0 40px;text-align:center}.eyebrow{color:var(--mute);font-size:13px;letter-spacing:.04em}
-h1{font-size:clamp(42px,8vw,84px);line-height:1;letter-spacing:-.04em;margin:18px 0}h1 em{font-style:normal;background:var(--g);-webkit-background-clip:text;background-clip:text;color:transparent}
-.lead{max-width:560px;margin:0 auto 28px;color:var(--mute);font-size:17px}
-.btn{display:inline-block;padding:9px 18px;border-radius:999px;border:1px solid var(--line);font-size:14px;margin:4px}.btn.p{background:var(--text);color:var(--bg);border-color:var(--text)}
-h2{font-size:clamp(28px,4vw,40px);letter-spacing:-.03em;line-height:1.1;margin:8px 0 6px}.sec{padding:36px 0}.kicker{color:var(--mute);font-size:13px}
-.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px}.card b{display:block;font-size:34px;letter-spacing:-.03em}.card span{color:var(--mute);font-size:13px}
-.fun{display:grid;gap:10px;margin-top:18px}.fun div{display:grid;grid-template-columns:150px 1fr 40px;gap:12px;align-items:center;font-size:14px}
-.bar{height:10px;border-radius:99px;background:var(--panel);border:1px solid var(--line);overflow:hidden}.bar i{display:block;height:100%;background:var(--g)}
-.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(138px,1fr));gap:10px;margin-top:16px}.step{border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--panel)}
-.step small{color:var(--accent);font-weight:600}.step p{margin:4px 0 0;color:var(--mute);font-size:13px}
-table{width:100%;border-collapse:collapse;margin-top:14px}th{text-align:left;color:var(--mute);font-weight:500;font-size:12px;padding:8px 10px}
-td{padding:12px 10px;border-top:1px solid var(--line);vertical-align:top}tr.l:hover td{background:var(--panel)}td small{color:var(--mute)}
-.pill{display:inline-block;padding:2px 10px;border-radius:99px;font-size:12px;border:1px solid var(--line);white-space:nowrap}
-.pill.ok{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 40%,transparent)}.pill.warn{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 40%,transparent)}.pill.mute{color:var(--mute)}
-.chips a{display:inline-block;margin:0 6px 6px 0;padding:4px 12px;border:1px solid var(--line);border-radius:99px;font-size:13px;color:var(--mute)}.chips a.on{background:var(--text);color:var(--bg)}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media(max-width:760px){.grid2{grid-template-columns:1fr}.fun div{grid-template-columns:100px 1fr 34px}}
-.box{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;margin-top:14px}.box h3{margin:0 0 8px;font-size:13px;color:var(--mute);font-weight:500;text-transform:uppercase;letter-spacing:.05em}
-.q{border-left:2px solid var(--accent);padding:2px 0 2px 10px;margin:8px 0;color:var(--mute);font-size:13px}
+a{color:inherit;text-decoration:none}.app{display:grid;grid-template-columns:236px 1fr;min-height:100vh}
+aside{background:linear-gradient(180deg,var(--navy),var(--navy2));color:#cfe0f5;padding:20px 14px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column}
+.brand{display:flex;gap:10px;align-items:center;color:#fff;font-weight:700;letter-spacing:.02em;margin:0 8px 22px}.brand i{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,var(--blue),var(--green))}
+.brand small{display:block;font-weight:500;font-size:11px;color:#8fb0d8}
+aside h4{margin:18px 10px 6px;font-size:11px;letter-spacing:.12em;color:#7f9fc9;font-weight:600}
+aside a{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-radius:9px;color:#cfe0f5;font-size:14px}
+aside a:hover{background:rgba(255,255,255,.07)}aside a.on{background:linear-gradient(90deg,var(--blue),#1d7fd6);color:#fff}
+.badge{background:var(--green);color:#04281f;border-radius:99px;font-size:11px;font-weight:700;padding:1px 8px}
+.note{margin-top:auto;font-size:12px;color:#8fb0d8;padding:10px}
+.top{display:flex;gap:12px;align-items:center;padding:14px 28px;border-bottom:1px solid var(--line);background:var(--panel);position:sticky;top:0;z-index:4}
+.top form{flex:1;max-width:420px}.top input{width:100%;padding:9px 14px;border:1px solid var(--line);border-radius:12px;background:var(--bg);font:inherit}
+.live{color:var(--mute);font-size:13px;margin-left:auto}.live b{color:var(--green-d)}
+.btn{display:inline-block;padding:9px 16px;border-radius:12px;border:1px solid var(--line);background:var(--panel);font-size:14px;cursor:pointer;font-family:inherit}
+.btn.p{background:linear-gradient(90deg,var(--blue),var(--green));color:#fff;border:0;font-weight:600}.btn.g{background:var(--green);color:#04281f;border:0;font-weight:600}
+main{padding:28px;max-width:1080px}.kicker{color:var(--mute);font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+h1{font-size:34px;letter-spacing:-.03em;margin:6px 0 4px}h2{font-size:20px;letter-spacing:-.02em;margin:0 0 4px}.sub{color:var(--mute);max-width:620px;margin:0 0 20px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px}.card small{color:var(--mute);font-size:11px;letter-spacing:.1em;text-transform:uppercase}
+.card b{display:block;font-size:34px;letter-spacing:-.03em;color:var(--navy)}.card span{color:var(--mute);font-size:13px}.card.hi b{color:var(--green-d)}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;margin-top:16px}.box h3{margin:0 0 8px;font-size:12px;color:var(--mute);font-weight:600;text-transform:uppercase;letter-spacing:.08em}
+.flow{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:12px}
+.step{border:1px solid var(--line);border-radius:14px;padding:12px;background:#fafcff}.step small{display:flex;align-items:center;gap:6px;color:var(--mute);font-size:11px;font-weight:600}
+.step small i{width:9px;height:9px;border-radius:50%;background:var(--blue)}.step.h small i{background:var(--green)}.step p{margin:3px 0 0;color:var(--mute);font-size:13px}
+.legend{float:right;font-size:12px;color:var(--mute)}.legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin:0 4px 0 12px}
+.fun{display:grid;gap:10px;margin-top:10px}.fun div{display:grid;grid-template-columns:150px 1fr 36px;gap:12px;align-items:center;font-size:14px}
+.bar{height:10px;border-radius:99px;background:#e8eff8;overflow:hidden}.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--blue),var(--green))}
+table{width:100%;border-collapse:collapse}th{text-align:left;color:var(--mute);font-weight:600;font-size:11px;letter-spacing:.08em;text-transform:uppercase;padding:8px 10px}
+td{padding:12px 10px;border-top:1px solid var(--line);vertical-align:top}tr.l{cursor:pointer}tr.l:hover td{background:#f6faff}td small{color:var(--mute)}
+.pill{display:inline-block;padding:2px 10px;border-radius:99px;font-size:12px;border:1px solid var(--line);white-space:nowrap;background:#fff}
+.pill.ok{color:var(--green-d);border-color:#a7e8cf;background:#ecfdf5}.pill.warn{color:#a15c07;border-color:#f6d49a;background:#fffaf0}.pill.mute{color:var(--mute)}
+.chips a{display:inline-block;margin:0 6px 8px 0;padding:4px 12px;border:1px solid var(--line);border-radius:99px;font-size:13px;color:var(--mute);background:#fff}.chips a.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.q{border-left:3px solid var(--blue);padding:2px 0 2px 10px;margin:8px 0;color:var(--mute);font-size:13px}.q b{color:var(--text)}
 pre{white-space:pre-wrap;font:14px/1.6 ui-monospace,Consolas,monospace;margin:0}.back{color:var(--mute);font-size:14px}
-code{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:1px 6px;font-size:13px}
-footer{color:var(--mute);font-size:13px;padding:36px 0;border-top:1px solid var(--line);margin-top:30px}
+input.t,textarea.t{width:100%;border:1px solid var(--line);border-radius:10px;padding:9px 12px;font:inherit;background:#fff;margin:4px 0 8px}textarea.t{min-height:190px;font:14px/1.6 ui-monospace,Consolas,monospace}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.ok-t{color:var(--green-d);font-weight:600;font-size:13px}
+@media(max-width:860px){.app{grid-template-columns:1fr}aside{position:static;height:auto}.grid2{grid-template-columns:1fr}.fun div{grid-template-columns:100px 1fr 30px}main{padding:18px}.top{padding:12px 18px}}
+"""
+
+JS = """
+const S=(k,v)=>{try{v===undefined?localStorage.removeItem(k):localStorage.setItem(k,v)}catch(e){}};
+const G=k=>{try{return localStorage.getItem(k)}catch(e){return null}};
+document.querySelectorAll('.draft').forEach(d=>{
+  const id=d.dataset.d,sub=d.querySelector('.sub-in'),body=d.querySelector('.body-in'),msg=d.querySelector('.msg');
+  const saved=G('draft:'+id);if(saved){try{const o=JSON.parse(saved);sub.value=o.s;body.value=o.b}catch(e){}}
+  if(G('sent:'+id)){msg.textContent='Approved and opened in your mail app'}
+  const save=()=>S('draft:'+id,JSON.stringify({s:sub.value,b:body.value}));sub.oninput=body.oninput=()=>{save();msg.textContent='Edit saved in this browser'};
+  d.querySelector('.send').onclick=()=>{save();S('sent:'+id,'1');msg.textContent='Approved and opened in your mail app';
+    location.href='mailto:?subject='+encodeURIComponent(sub.value)+'&body='+encodeURIComponent(body.value)};
+  d.querySelector('.copy').onclick=()=>{navigator.clipboard&&navigator.clipboard.writeText(sub.value+'\\n\\n'+body.value);msg.textContent='Copied'};
+});
+document.querySelectorAll('.resolve').forEach(b=>{
+  const id=b.dataset.d,card=b.closest('.box');if(G('done:'+id)){card.style.opacity='.45';b.textContent='Resolved'}
+  b.onclick=()=>{const on=!G('done:'+id);S('done:'+id,on?'1':undefined);card.style.opacity=on?'.45':'1';b.textContent=on?'Resolved':'Mark resolved'}
+});
 """
 
 
@@ -70,90 +104,123 @@ def load():
     return json.loads(f.read_text(encoding="utf-8")) if f.exists() else {"rows": [], "generated": None, "hunter_left": None}
 
 
-def shell(tab, body):
-    nav = "".join(f'<a href="/?p={k}" class="{"on" if tab == k else ""}">{v}</a>'
-                  for k, v in (("overview", "Overview"), ("companies", "Companies"), ("method", "Method"), ("run", "Run")))
-    return (f'<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">'
-            f'<title>Outreach Agent</title><style>{CSS}</style><header><div class=wrap><a class=brand href="/"><i></i>Outreach Agent</a>'
-            f'<nav>{nav}</nav></div></header><main class=wrap>{body}</main>'
-            f'<div class=wrap><footer>Case study build for Sprinto-style compliance outreach. Not affiliated with Sprinto. '
-            f'Every email is a draft: nothing is sent automatically.</footer></div>')
-
-
 def count(rows, *st):
     return sum(r["status"] in st for r in rows)
+
+
+def shell(tab, body, snap, q=""):
+    rows = snap["rows"]
+    human, drafts = sum(r["needs_human"] for r in rows), count(rows, "drafted")
+
+    def link(k, label, badge=None):
+        b = f'<span class=badge>{badge}</span>' if badge else ""
+        return f'<a href="/?p={k}" class="{"on" if tab == k else ""}">{label}{b}</a>'
+
+    when = f'Last run <b>{e(snap["generated"][:10])}</b>' if snap["generated"] else "No run yet"
+    return ('<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">'
+            f'<title>Outreach Agent</title><style>{CSS}</style><div class=app><aside>'
+            '<div class=brand><i></i><div>OUTREACH<small>AGENT</small></div></div>'
+            f'<h4>PIPELINE</h4>{link("overview", "Overview")}{link("run", "Run pipeline")}{link("companies", "Companies")}{link("method", "Method")}'
+            f'<h4>HUMAN GATES</h4>{link("review", "Review queue", human)}{link("drafts", "Drafts &amp; sends", drafts)}'
+            '<div class=note>The model reads and writes. Python rules decide. Every draft waits for you.<br><br>Case study build, not affiliated with Sprinto.</div></aside>'
+            '<div><div class=top><form action="/"><input type=hidden name=p value=companies><input name=q placeholder="Search companies" value="'
+            f'{e(q)}"></form><span class=live>{when}</span><a class="btn p" href="/?p=run">Run pipeline</a></div>'
+            f'<main>{body}</main></div></div><script>{JS}</script>')
 
 
 def overview(snap):
     rows = snap["rows"]
     n = len(rows)
-    drafted, human = count(rows, "drafted"), sum(r["needs_human"] for r in rows)
-    gates = n - count(rows, "failed", "disqualified", "manual_review")
     fit = count(rows, "drafted", "no_contact", "no_hook")
-    stages = [("Researched", n - count(rows, "failed")), ("Passed the gates", gates), ("Fit score 70+", fit),
-              ("Contact found", count(rows, "drafted", "no_hook")), ("Email drafted", drafted)]
+    human = sum(r["needs_human"] for r in rows)
+    hl = snap["hunter_left"]
+    cards = [("Pool", n, "companies on the list", ""), ("Researched", n - count(rows, "failed"), "pages read", ""),
+             ("Qualified", fit, "fit score 70 or more", "hi"), ("Flagged", human, "waiting on a human", ""),
+             ("Dropped", count(rows, "disqualified", "not_qualified"), "a gate failed", ""),
+             ("Hunter left", "-" if hl is None else hl, "searches this month", "")]
+    cards_html = "".join(f'<div class="card {c}"><small>{a}</small><b>{b}</b><span>{d}</span></div>' for a, b, d, c in cards)
+    flow = "".join(f'<div class="step {"h" if h else ""}"><small><i></i>STEP {i}</small><b>{t}</b><p>{d}</p></div>' for i, (t, d, h) in enumerate(STEPS, 1))
+    stages = [("Researched", n - count(rows, "failed")), ("Passed the gates", n - count(rows, "failed", "disqualified", "manual_review")),
+              ("Fit score 70+", fit), ("Contact found", count(rows, "drafted", "no_hook")), ("Email drafted", count(rows, "drafted"))]
     top = max(n, 1)
     fun = "".join(f'<div><span>{l}</span><span class=bar><i style="width:{v * 100 // top}%"></i></span><b>{v}</b></div>' for l, v in stages)
-    steps = "".join(f'<div class=step><small>Step {i}</small><br><b>{t}</b><p>{d}</p></div>' for i, (t, d) in enumerate(STEPS, 1))
-    when = f' Last live run: {e(snap["generated"][:16].replace("T", " "))} UTC.' if snap["generated"] else ""
-    hl = "" if snap["hunter_left"] is None else f'<div class=card><b>{snap["hunter_left"]}</b><span>Hunter searches left</span></div>'
-    return (f'<section class=hero><div class=eyebrow>Outreach agent for compliance automation</div>'
-            f'<h1>Every decision,<br><em>defended.</em></h1>'
-            f'<p class=lead>It reads a company\'s site, decides if it needs SOC 2 help, finds the right person and drafts an email, '
-            f'and shows the quote behind every claim.</p><a class="btn p" href="/?p=companies">See the companies</a>'
-            f'<a class=btn href="/?p=run">Run the pipeline</a></section>'
-            f'<section class=sec><div class=kicker>Latest run.{when}</div><div class=cards>'
-            f'<div class=card><b>{n}</b><span>Companies researched</span></div><div class=card><b>{drafted}</b><span>Emails drafted</span></div>'
-            f'<div class=card><b>{human}</b><span>Waiting on a human</span></div>'
-            f'<div class=card><b>{count(rows, "disqualified", "not_qualified")}</b><span>Dropped by a rule</span></div>{hl}</div></section>'
-            f'<section class=sec><div class=kicker>Funnel</div><h2>Where companies drop off.</h2>'
-            f'<p class=lead style="margin:0">From a scraped homepage to an email ready to review.</p><div class=fun>{fun}</div></section>'
-            f'<section class=sec><div class=kicker>The case pipeline</div><h2>Seven steps, one command.</h2><div class=steps>{steps}</div></section>')
+    return ('<div class=kicker>Latest run</div><h1>Pipeline overview</h1>'
+            '<p class=sub>Funded SaaS companies, shortlisted by rules, researched in batches, qualified in Python and drafted automatically when nothing needs a human.</p>'
+            f'<div class=cards>{cards_html}</div>'
+            f'<div class=box><span class=legend><i style="background:var(--blue)"></i>automatic<i style="background:var(--green)"></i>human gate</span>'
+            f'<h3>The case pipeline</h3><h2>Seven steps to an email in your inbox.</h2><div class=flow>{flow}</div></div>'
+            f'<div class=box><h3>Funnel</h3><h2>Where companies drop off.</h2><div class=fun>{fun}</div></div>')
 
 
-def companies(snap, flt):
+def companies(snap, flt, q):
     rows = snap["rows"]
     groups = {"all": None, "drafted": ("drafted",), "human": ("manual_review", "failed", "no_contact", "no_hook"),
               "dropped": ("disqualified", "not_qualified")}
     chips = "".join(f'<a class="{"on" if flt == k else ""}" href="/?p=companies&f={k}">{k.title()}'
                     f' ({len(rows) if v is None else count(rows, *v)})</a>' for k, v in groups.items())
-    keep = [r for r in rows if groups.get(flt) is None or r["status"] in groups[flt]]
+    keep = [r for r in rows if (groups.get(flt) is None or r["status"] in groups[flt])
+            and (not q or q.lower() in (r["domain"] + r["reason"]).lower())]
     keep.sort(key=lambda r: (r["status"] != "drafted", -(r.get("score") or 0)))
     body = "".join(
         f'<tr class=l onclick="location=\'/?p=company&d={quote(r["domain"])}\'"><td><a href="/?p=company&d={quote(r["domain"])}"><b>{e(r["domain"])}</b></a>'
         f'<br><small>{e(r["reason"][:140])}</small></td><td><span class="pill {STATUS[r["status"]][1]}">{STATUS[r["status"]][0]}</span></td>'
         f'<td>{"-" if r.get("score") is None else r["score"]}</td><td>{e(r["contact"]["name"]) if r.get("contact") else "-"}</td></tr>'
-        for r in keep) or '<tr><td colspan=4><small>No companies yet. Run the pipeline and snapshot it.</small></td></tr>'
-    return (f'<section class=sec><div class=kicker>Companies</div><h2>Every company, with its reason.</h2><div class=chips style="margin-top:14px">{chips}</div>'
-            f'<table><tr><th>Company</th><th>Outcome</th><th>Fit</th><th>Contact</th></tr>{body}</table></section>')
+        for r in keep) or '<tr><td colspan=4><small>Nothing matches.</small></td></tr>'
+    return (f'<div class=kicker>Companies</div><h1>Every company, with its reason.</h1><div class=chips style="margin-top:14px">{chips}</div>'
+            f'<div class=box style="margin-top:0"><table><tr><th>Company</th><th>Outcome</th><th>Fit</th><th>Contact</th></tr>{body}</table></div>')
 
 
 def company(snap, domain):
     r = next((x for x in snap["rows"] if x["domain"] == domain), None)
     if not r:
-        return '<section class=sec><a class=back href="/?p=companies">Back</a><h2>Not found.</h2></section>'
+        return '<a class=back href="/?p=companies">Back</a><h1>Not found.</h1>'
     lab, cls = STATUS[r["status"]]
     ev = "".join(f'<div class=q><b>{e(x["question"])}</b> {"answered" if x["answered"] else "unanswered, so: " + e(x["if_unanswered"])}'
                  f'<br>{e(", ".join(x["fetched"]) or "the homepage was enough")}</div>' for x in r.get("evidence", [])) or "<small>No pages were read.</small>"
-    f = r.get("facts", {})
-    facts = "".join(f"<tr><td><small>{e(k.replace('_', ' '))}</small></td><td>{e(', '.join(map(str, v)) if isinstance(v, list) else str(v))}</td></tr>"
-                    for k, v in f.items() if v not in (None, "", [], False))
-    mail = ""
+    facts = "".join("<tr><td><small>{}</small></td><td>{}</td></tr>".format(
+        e(k.replace("_", " ")), e(", ".join(map(str, v)) if isinstance(v, list) else str(v)))
+        for k, v in r.get("facts", {}).items() if v not in (None, "", [], False)) or "<tr><td><small>none</small></td></tr>"
+    flags = "".join(f"<div class=q>{e(x)}</div>" for x in r.get("flags", []))
+    extra = ""
     if r.get("body"):
         c = r["contact"]
         pains = "".join(f'<div class=q><b>{e(p["pain"])}</b><br>{e(p["evidence"])}</div>' for p in r["pain_points"])
-        link = f'mailto:?subject={quote(r["subject"])}&body={quote(r["body"])}'
-        mail = (f'<div class=grid2><div class=box><h3>Why this person</h3><b>{e(c["name"])}</b>, {e(c["title"])}<div class=q>{e(c["why"])}</div></div>'
-                f'<div class=box><h3>Two pain points</h3>{pains}</div></div>'
-                f'<div class=box><h3>Email draft</h3><p><b>Hook:</b> {e(r["hook"])}<br><b>Subject:</b> {e(r["subject"])}</p><pre>{e(r["body"])}</pre>'
-                f'<p><a class="btn p" href="{e(link)}">Review and send from my mail app</a></p>'
-                f'<small>Opens your own mail app with the draft filled in. Nothing is sent from here.</small></div>')
-    flags = "".join(f"<div class=q>{e(x)}</div>" for x in r.get("flags", []))
-    return (f'<section class=sec><a class=back href="/?p=companies">Back to companies</a><h2>{e(r["domain"])}</h2>'
+        extra = (f'<div class=grid2><div class=box><h3>Why this person</h3><b>{e(c["name"])}</b>, {e(c["title"])}<div class=q>{e(c["why"])}</div></div>'
+                 f'<div class=box><h3>Two pain points</h3>{pains}</div></div>'
+                 f'<div class=box><h3>Email draft</h3><p><b>Hook:</b> {e(r["hook"])}<br><b>Subject:</b> {e(r["subject"])}</p><pre>{e(r["body"])}</pre>'
+                 '<p><a class="btn g" href="/?p=drafts">Edit and send in Drafts &amp; sends</a></p></div>')
+    elif r.get("needs_human"):
+        extra = f'<div class=box><h3>What a human should do</h3>{e(TODO.get(r["status"], ""))}</div>'
+    return (f'<a class=back href="/?p=companies">Back to companies</a><h1>{e(r["domain"])}</h1>'
             f'<span class="pill {cls}">{lab}</span> <small>fit {"-" if r.get("score") is None else r["score"]}</small>'
-            f'<p class=lead style="margin:10px 0 0;text-align:left;max-width:none">{e(r["reason"])}</p>'
-            f'<div class=grid2><div class=box><h3>Evidence map</h3>{ev}{flags}</div><div class=box><h3>Facts extracted</h3><table>{facts or "<tr><td><small>none</small></td></tr>"}</table></div></div>'
-            f'{mail}</section>')
+            f'<p class=sub style="margin-top:10px">{e(r["reason"])}</p>'
+            f'<div class=grid2><div class=box style="margin-top:0"><h3>Evidence map</h3>{ev}{flags}</div>'
+            f'<div class=box style="margin-top:0"><h3>Facts extracted</h3><table>{facts}</table></div></div>{extra}')
+
+
+def review(snap):
+    rows = [r for r in snap["rows"] if r["needs_human"]]
+    cards = "".join(
+        f'<div class=box><div class=row><b>{e(r["domain"])}</b><span class="pill warn">{e(r["status"].replace("_", " "))}</span>'
+        f'<a class=btn style="margin-left:auto" href="/?p=company&d={quote(r["domain"])}">Open</a>'
+        f'<button class="btn resolve" data-d="{e(r["domain"])}">Mark resolved</button></div>'
+        f'<p style="margin:8px 0 4px">{e(r["reason"])}</p><div class=q><b>Do this:</b> {e(TODO.get(r["status"], ""))}</div></div>' for r in rows)
+    return ('<div class=kicker>Human gate</div><h1>Review queue</h1><p class=sub>Companies the rules could not settle. '
+            'Nothing here is guessed: each one waits for a person.</p>' + (cards or '<div class=box>Nothing is waiting on you.</div>'))
+
+
+def drafts(snap):
+    rows = [r for r in snap["rows"] if r.get("body")]
+    cards = "".join(
+        f'<div class="box draft" data-d="{e(r["domain"])}"><div class=row><b>{e(r["contact"]["name"])}</b><small>{e(r["contact"]["title"])} at {e(r["domain"])}</small>'
+        f'<a class=btn style="margin-left:auto" href="/?p=company&d={quote(r["domain"])}">Why this email</a></div>'
+        f'<small>Hook: {e(r["hook"])}</small>'
+        f'<input class="t sub-in" value="{e(r["subject"])}"><textarea class="t body-in">{e(r["body"])}</textarea>'
+        '<div class=row><button class="btn g send">Approve &amp; send</button><button class="btn copy">Copy</button><span class="ok-t msg"></span></div></div>'
+        for r in rows)
+    return ('<div class=kicker>Human gate</div><h1>Drafts &amp; sends</h1><p class=sub>Edit a draft, then approve it. '
+            '"Approve &amp; send" opens your own mail app with the text filled in, so mail goes out from your account and nothing is sent from this site. '
+            'Edits are saved in this browser.</p>' + (cards or '<div class=box>No drafts yet.</div>'))
 
 
 NINE = [("Kill switches", "A no means do not build it", [
@@ -178,16 +245,16 @@ DECISIONS = [("Outcome", "Cut prospect research from 15-20 minutes to under 2 mi
 def method():
     ev = "".join(f"<tr><td><b>{e(q['ask'])}</b></td><td>{e(', '.join('/' + p for p in q['paths']))}</td><td>{q['limit']}</td>"
                  f"<td>{e(q['if_unanswered'])}</td></tr>" for q in qualify.QUESTIONS)
-    nine = "".join(f"<div class=box><h3>{e(t)}</h3><small>{e(s)}</small>"
+    nine = "".join(f"<div class=box style='margin-top:0'><h3>{e(t)}</h3><small>{e(s)}</small>"
                    + "".join(f"<div class=q><b>{e(a)}</b> {e(b)}</div>" for a, b in rows) + "</div>" for t, s, rows in NINE)
     dec = "".join(f"<div class=q><b>{i}. {e(a)}</b> {e(b)}</div>" for i, (a, b) in enumerate(DECISIONS, 1))
-    return ('<section class=sec><div class=kicker>Method</div><h2>Why it is built this way.</h2>'
-            '<p class=lead style="text-align:left;margin:0">Code decides, the model reads. The model fills named fields; Python checks them, '
-            'picks the next page, stops at the limit, and hands over to a human when unsure.</p>'
+    return ('<div class=kicker>Method</div><h1>Why it is built this way.</h1>'
+            '<p class=sub>Code decides, the model reads. The model fills named fields; Python checks them, picks the next page, '
+            'stops at the limit, and hands over to a human when unsure.</p>'
             f'<div class=box><h3>Evidence Map (the live rules)</h3><table><tr><th>Question</th><th>Look at</th><th>Fetch limit</th><th>If unanswered</th></tr>{ev}</table>'
-            '<small>Worst case: 4 page fetches beyond the homepage. A hallucinated quote that is not on the page is dropped and counted.</small></div>'
-            f'<h2 style="margin-top:36px">The nine checks.</h2><div class=grid2>{nine}</div>'
-            f'<h2 style="margin-top:36px">Five pre-build decisions.</h2><div class=box>{dec}</div></section>')
+            '<small>Worst case: 4 page fetches beyond the homepage. A quote that is not on the page is dropped and counted.</small></div>'
+            f'<h2 style="margin-top:28px">The nine checks</h2><div class=grid2 style="margin-top:10px">{nine}</div>'
+            f'<h2 style="margin-top:28px">Five pre-build decisions</h2><div class=box style="margin-top:10px">{dec}</div>')
 
 
 def run_page(demo):
@@ -195,31 +262,36 @@ def run_page(demo):
     if demo:
         rows = [run.process(d, str(ROOT / "data/contacts.csv")) for d in (ROOT / "data/domains.txt").read_text().split()]
         st = impact.run_stats(rows)
-        out = ('<div class=box><h3>Demo run (fictional companies, canned model replies, nothing sent)</h3><table>'
+        out = ('<div class=box><h3>Demo run: fictional companies, canned model replies, nothing sent</h3><table>'
                + "".join(f'<tr><td><b>{e(r["domain"])}</b></td><td><span class="pill {STATUS[r["status"]][1]}">{STATUS[r["status"]][0]}</span></td>'
                          f'<td><small>{e(r["reason"][:110])}</small></td></tr>' for r in rows)
                + f'</table><p><small>{st["companies"]} companies, {st["needs_human"]} for a human, '
                  f'{st["avg_fetches_beyond_homepage"]} extra page fetches each on average (cap 4).</small></p></div>')
-    return (f'<section class=sec><div class=kicker>Run</div><h2>Run the pipeline.</h2>'
-            f'<p class=lead style="text-align:left;margin:0">The live run needs your keys, so it runs on your machine. This page can run the offline demo.</p>'
-            f'<p><a class="btn p" href="/?p=run&demo=1">Run the demo</a></p>{out}'
-            f'<div class=box><h3>Live run</h3><pre>cp .env.example .env     # add GEMINI_API_KEY, HUNTER_API_KEY, TO_ADDRESS\n'
-            f'python shortlist.py 20   # funded SaaS from Google News\n'
-            f'python run.py --domains data/shortlist.txt\npython snapshot.py       # refresh this page with the results\ngit push</pre></div></section>')
+    return ('<div class=kicker>Run</div><h1>Run the pipeline</h1>'
+            '<p class=sub>A live run needs your keys, so it runs on your machine and publishes here. This page can run the offline demo.</p>'
+            '<p><a class="btn g" href="/?p=run&demo=1">Run the demo</a></p>' + out +
+            '<div class=box><h3>Live run</h3><pre>cp .env.example .env     # add GEMINI_API_KEY, HUNTER_API_KEY, TO_ADDRESS\n'
+            'python shortlist.py 20   # funded SaaS from Google News\n'
+            'python run.py --domains data/shortlist.txt\n'
+            'python snapshot.py       # refresh this site with the results\ngit push</pre></div>')
 
 
 def page(url):
     q = {k: v[0] for k, v in parse_qs(urlparse(url).query).items()}
     tab, snap = q.get("p", "overview"), load()
     if tab == "companies":
-        return shell("companies", companies(snap, q.get("f", "all")))
+        return shell("companies", companies(snap, q.get("f", "all"), q.get("q", "")), snap, q.get("q", ""))
     if tab == "company":
-        return shell("companies", company(snap, q.get("d", "")))
+        return shell("companies", company(snap, q.get("d", "")), snap)
+    if tab == "review":
+        return shell("review", review(snap), snap)
+    if tab == "drafts":
+        return shell("drafts", drafts(snap), snap)
     if tab == "method":
-        return shell("method", method())
+        return shell("method", method(), snap)
     if tab == "run":
-        return shell("run", run_page(q.get("demo")))
-    return shell("overview", overview(snap))
+        return shell("run", run_page(q.get("demo")), snap)
+    return shell("overview", overview(snap), snap)
 
 
 class handler(BaseHTTPRequestHandler):
