@@ -249,4 +249,13 @@ _rq.post, llm.RETRY_WAITS, config.API_KEY = real_post, real_waits, ""
 assert app.stage_label("Series B") == "Series B" and app.stage_label("raised a series c round") == "Series C"
 assert app.stage_label("$1M funding round from private investors") == "Funded" and app.stage_label("Pre-seed") == "Seed"
 assert app.stage_label(None) == "-" and app.stage_label("Bootstrapped") == "Bootstrapped"
+# 15. A new sender name re-signs drafts still waiting, and only a sign-off that is the old name
+waiting = {"domain": "resign.example", "status": "drafted", "subject": "Hi", "body": "Hi Ann,\n\nShort note.\n\nPiyush",
+           "followup": {"subject": "Re", "body": "Following up.\n\nPiyush", "flag": "", "drafted": "x"}}
+other = {"domain": "keep.example", "status": "drafted", "subject": "Hi", "body": "Hi Bo,\n\nPiyush liked your post.\n\nSam"}
+db.save_company(waiting); db.save_company(other)
+assert app.resign("Piyush", "Bhushan") >= 1
+got = {c["domain"]: c for c in db.companies()}
+assert got["resign.example"]["body"].endswith("\n\nBhushan") and got["resign.example"]["followup"]["body"].endswith("\n\nBhushan")
+assert got["keep.example"]["body"].endswith("Sam") and app.resign("Bhushan", "Bhushan") == 0
 print("ok")

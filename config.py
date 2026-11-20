@@ -33,7 +33,7 @@ TIER_A = 85              # score at or above this is tier A; the qualifying scor
 QUALIFY_THRESHOLD = 70      # minimum ICP fit (0-100, same scale as the score) to email
 STAGE_UNKNOWN_PENALTY = 10  # Evidence Map: unanswered stage = "qualify at lower rank, flagged"
 TO_ADDRESS = os.getenv("TO_ADDRESS", "growth.lead@example.com")  # case rule: all mail goes to your own inbox
-SENDER_NAME = os.getenv("SENDER_NAME", "Piyush")
+SENDER_NAME = os.getenv("SENDER_NAME", "Bhushan")
 
 USER_AGENT = "sprinto-outreach-research-bot/1.0"
 FETCH_DELAY = 1.0  # seconds between live requests
