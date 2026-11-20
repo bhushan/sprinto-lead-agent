@@ -28,7 +28,7 @@ DEFAULTS = {
               "engineering": ["cto", "chief technology", "vp engineering", "vice president engineering",
                               "head of engineering", "director of engineering"],
               "founder": ["founder", "ceo", "chief executive"]},
-    "sender": "Piyush",
+    "sender": "Bhushan",
     "target": 3,
     "keywords": [],
     "regions": ["IN", "US"],
