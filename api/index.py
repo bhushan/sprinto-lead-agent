@@ -851,6 +851,25 @@ def do_shortlist(body):
     return 200, {"note": f"Found {len(found)} companies. They are in the queue below."}
 
 
+def resign(old, new):
+    """Swap the sign-off on drafts and follow-ups still waiting when the sender name changes. Returns how many changed."""
+    if not old or old == new:
+        return 0
+    tail = re.compile(r"(\n\s*)" + re.escape(old) + r"\s*$")
+    n = 0
+    for c in db.companies():
+        hit = False
+        for holder in (c, c.get("followup") or {}):
+            body = holder.get("body")
+            if isinstance(body, str) and tail.search(body):
+                holder["body"] = tail.sub(lambda m: m.group(1) + new, body)
+                hit = True
+        if hit:
+            db.save_company(c)
+            n += 1
+    return n
+
+
 def do_settings(body):
     if body.get("reset"):
         db.set_settings(None)
@@ -860,10 +879,12 @@ def do_settings(body):
         if not isinstance(cfg, dict):
             return 400, {"error": "Bad settings."}
         stored = settings.effective(db.get_settings())  # the form does not carry the prospect search fields
-        db.set_settings(settings.validate({"keywords": stored["keywords"], "regions": stored["regions"], "sources": stored["sources"], **cfg}))
+        new = settings.validate({"keywords": stored["keywords"], "regions": stored["regions"], "sources": stored["sources"], **cfg})
+        db.set_settings(new)
     except ValueError as ex:
         return 400, {"error": str(ex)}
-    return 200, {"note": "Saved. The next run uses these settings."}
+    n = resign(stored["sender"], new["sender"])
+    return 200, {"note": "Saved. The next run uses these settings." + (f" {n} waiting draft{'s' if n != 1 else ''} now signed {new['sender']}." if n else "")}
 
 
 def do_prospects(body):
